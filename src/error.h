@@ -14,4 +14,6 @@
 #define warning_line(FILELINE, ...)          { printf(BMAGENTA "[WARN] " RESET __VA_ARGS__); printf("\n"); printFileLine(&FILELINE); printf("\n"); }
 #define warning_token(TOKEN, ...)            { printf(BMAGENTA "[WARN] " RESET __VA_ARGS__); printf("\n"); printToken(&TOKEN)      ; printf("\n"); }
 
+typedef int ExitCode;
+
 #endif /* CASPIAN_ERROR_H */

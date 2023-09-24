@@ -87,7 +87,8 @@ static bool isDelimiter(const char c) {
     }
 }
 
-static bool isOperator(const char c, const char d) {
+static inline bool isOperator2(const char c, const char d) {
+    /* This chaining should be faster than `strncmp` for each case */
     return (
         (c=='=' && d=='=') ||
         (c=='<' && d=='=') ||
@@ -114,7 +115,17 @@ static bool isOperator(const char c, const char d) {
 
         (c=='&' && d=='&') ||
         (c=='|' && d=='|') ||
-        0
+
+        /* Block comments are considered "operators"
+            for simplicity in the Syntax tree builder */
+        (c=='/' && d=='*') ||
+        (c=='*' && d=='/')
+    );
+}
+static inline bool isOperator3(const char c, const char d, const char e) {
+    return (
+        (c=='<' && d=='<' && e=='=') ||
+        (c=='>' && d=='>' && e=='=')
     );
 }
 
@@ -122,10 +133,11 @@ uint tokenizeLine(const FileLine* fl, Token tokens[CASPIAN_MAX_TOKENS_IN_LINE]) 
     const char* text = fl->text;
     const uint  len  = strlen(text);
 
-    uint num_tokens = 0;
+    uint num_tokens = 0, buf_index = 0;
     char buf[CASPIAN_MAX_TOKEN_SZ];
-    uint buf_index = 0;
+    bool in_string = false, in_char = false;
 
+    /* Lambda equivalents for pushing char and pushing a token */
     #define appendChar(CHAR) buf[buf_index++]=CHAR
     #define appendToken(TOKEN, INDEX) {\
         if (buf_index > 0) {\
@@ -135,30 +147,35 @@ uint tokenizeLine(const FileLine* fl, Token tokens[CASPIAN_MAX_TOKENS_IN_LINE]) 
         buf_index = 0;\
     }
 
-    bool in_string = false, in_char = false;
+    /* Lambda equivalent for single & double quoted groups */
+    #define containedCheck(CHAR, FLAG, OTHER_FLAG) {\
+        if (!OTHER_FLAG && c==CHAR) {\
+            if (FLAG) {\
+                appendChar(c);\
+                appendToken(buf, i+1);\
+                FLAG = false;\
+                continue;\
+            } else {\
+                appendToken(buf, i);\
+                appendChar(c);\
+                FLAG = true;\
+                continue;\
+            }\
+        }\
+    }
 
     uint i;
     for (i = 0; i<len; i++) {
-        const char c = text[i+0];
-        const char d = text[i+1]; /* No error checking here b/c null-terminated guarantees len is always 1 less than actual length of array */
+        const char c =     text[i+0];
+        const char d =     text[i+1];     /* No error checking here b/c null-terminated guarantees 
+                                             len is always 1 less than actual length of array */
+        const char e = d ? text[i+2] : 0; /* Error checking if `d` is null character */
+        
+        if ( (c=='/') && (d=='/') ) break;       /* Ignore inline comments */
 
-        if ( (c=='/') && (d=='/') ) break; /* Ignore inline comments */
-
-        #define containedCheck(CHAR, FLAG, OTHER_FLAG) {\
-            if (!OTHER_FLAG && c==CHAR) {\
-                if (FLAG) {\
-                    appendChar(c);\
-                    appendToken(buf, i+1);\
-                    FLAG = false;\
-                    continue;\
-                } else {\
-                    appendToken(buf, i);\
-                    appendChar(c);\
-                    FLAG = true;\
-                    continue;\
-                }\
-            }\
-        }
+        /**************************************************************************/
+        /* String constants & Characters ******************************************/
+        
         containedCheck('\"', in_string, in_char  );
         containedCheck('\'', in_char  , in_string);
 
@@ -169,22 +186,33 @@ uint tokenizeLine(const FileLine* fl, Token tokens[CASPIAN_MAX_TOKENS_IN_LINE]) 
                 i++;
                 continue;
             }
-            goto APPEND;
+            appendChar(c);
+            continue;
         }
 
-        if (isOperator(c, d)) {
+        /**************************************************************************/
+        /* Operators and delimiters ***********************************************/
+
+        if (isOperator3(c, d, e)) {
             appendToken(buf, i);
-            appendChar(c);
-            appendChar(d);
-            appendToken(buf, i+2);
+            appendChar (c); appendChar (d); appendChar (e);
+            appendToken(buf, i+3); /* And skip 3 so we include throth operators */
+            i+=2;
+            continue;
+
+        }
+        if (isOperator2(c, d)) {
+            appendToken(buf, i);
+            appendChar (c); appendChar (d);
+            appendToken(buf, i+2); /* And skip 2 so we include both operators */
             i++;
             continue;
 
         }
         if (isDelimiter(c)) {
             appendToken(buf, i);
-            appendChar(c);
-            appendToken(buf, i+1);
+            appendChar (c);
+            appendToken(buf, i+1); /* And skip 1 so we include the delimiter */
             continue;
         }
 
@@ -192,8 +220,34 @@ uint tokenizeLine(const FileLine* fl, Token tokens[CASPIAN_MAX_TOKENS_IN_LINE]) 
             appendToken(buf, i);
             continue;
         }
-APPEND:
+
+        /**************************************************************************/
+        /* Regular Characters *****************************************************/
+        if (c == '\\') continue; // TODO: Remove b/c preprocessor would have taken care of these. Here right now for testing
         appendChar(c);
-    } appendToken(buf, i);
+
+    } appendToken(buf, i); /* Clear out the buffer at the end */
     return num_tokens;
+}
+
+#define BRIEF 5
+void printTokens(const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint len) {
+    uint i;
+    for (i = 0; i<len && i<BRIEF; i++)
+        printf("`%s` ", tokens[i].text);
+    if (i>BRIEF) printf("... `%s`", tokens[len-1].text);
+    printf("\n");
+}
+
+uint copyTokens(Token a[CASPIAN_MAX_TOKENS_IN_LINE], const Token b[CASPIAN_MAX_TOKENS_IN_LINE], const uint len) {
+    for (uint i = 0; i<len; i++)
+        a[i] = b[i];
+    return len;
+}
+
+uint appendTokens(Token a[CASPIAN_MAX_TOKENS_IN_LINE], const uint a_len, const Token b[CASPIAN_MAX_TOKENS_IN_LINE], const uint b_len) {
+    uint len = (a_len + b_len) % CASPIAN_MAX_TOKENS_IN_LINE;
+    for (uint a_i = a_len, b_i = 0; a_i<len; a_i++, b_i++)
+        a[a_i] = b[b_i];
+    return len;
 }
