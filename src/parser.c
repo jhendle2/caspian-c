@@ -6,10 +6,10 @@
 
 #include "error.h"
 
-uint gTotalNodes = 0;
+uint gTotalSyntaxNodes = 0;
 SyntaxPtr newSyntaxPtr(const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens) {
     SyntaxPtr sp = (SyntaxPtr)malloc(sizeof(struct syntax_node_s));
-    gTotalNodes++;
+    gTotalSyntaxNodes++;
     
     sp->parent = NULL;
     
@@ -30,7 +30,7 @@ static SyntaxPtr newMaster(const char* file_path) {
     return newSyntaxPtr(tokens, 1);
 }
 
-uint gTotalFrees = 0;
+uint gTotalSyntaxFrees = 0;
 void delSyntaxPtr(SyntaxPtr* sp) {
     if (*sp == NULL) return; // TODO: Realistically, this should never happen so it can probably be removed
 
@@ -38,7 +38,7 @@ void delSyntaxPtr(SyntaxPtr* sp) {
     for (uint i = 0; i<(*sp)->num_children; i++)
         delSyntaxPtr( &((*sp)->children[i]) );
 
-    free(*sp); gTotalFrees++;
+    free(*sp); gTotalSyntaxFrees++;
     *sp = NULL;
 }
 
@@ -135,7 +135,7 @@ void splitAtScopeToken( Token original[CASPIAN_MAX_TOKENS_IN_LINE], uint* origin
     } *right_len = 0; /* If there was no scope token tell everyone else `right` isn't worth processing */
 }
 
-#include <assert.h>
+SyntaxPtr gCurrentSyntaxMaster = NULL;
 SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines) {
     /*
         Builds a syntax tree following the conventions of ANSI-C grammar.
@@ -152,11 +152,11 @@ SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CA
             b) The left half is processed into a syntax node (`child`).
                 i) This `child` node is added as a child to the `current` node.
                 ii) Adjust the `current` node based on a criteria:
-                    1) If the new `child` node opens a new scope (ends in '{'),
+                    1) If the new `child` node opens a new scope (ends in '{'):
                         the `current` node moves "down" to the become the new `child`.
-                    2) If the new `child` node closes the current scope (ends in '}'),
+                    2) If the new `child` node closes the current scope (ends in '}'):
                         the `current` node moves "up" to its `parent` node.
-                    3) If the new `child` node is a statement (ends in ';' or ','),
+                    3) If the new `child` node is a statement (ends in ';' or ','):
                         do nothing special.
 
         5) Once no more lines left to be read, append one final `child` node from
@@ -164,9 +164,42 @@ SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CA
 
         6) Return the `master` node, which points to the very top node in the syntax tree.
     */
-    SyntaxPtr master  = newMaster(file_path); /* Head syntax node for the entire file */
-    SyntaxPtr current = master;               /* Keeps track of the current node in the syntax tree */
+    SyntaxPtr master     = newMaster(file_path); /* Head syntax node for the entire file */
+    SyntaxPtr current    = master;               /* Keeps track of the current node in the syntax tree */
+    gCurrentSyntaxMaster = master;               /* For `safeExit` to function properly */
 
+    /**************************************************************************/
+    /* Setup for later syntax checking ****************************************/
+    Token prev_scope_token_stack[CASPIAN_MAX_SYNTAX_CHILDREN];
+    uint  prev_scope_token_stack_len = 0;
+
+    #define pushScopeTokenStack(TOKEN) {\
+        if (prev_scope_token_stack_len>=CASPIAN_MAX_SYNTAX_DEPTH) {\
+            warning_token(TOKEN, "Token exceeds scope depth and will be ignored.");\
+        } else prev_scope_token_stack[prev_scope_token_stack_len++] = TOKEN;\
+    }
+    #define popScopeTokenStack(TOKEN) prev_scope_token_stack_len--
+    #define compareScopeTokenToStack(TOKEN) {\
+        if (prev_scope_token_stack_len==0) error_token(1, TOKEN, "Closing scope token without previous opening one");\
+        const Token stack_top = prev_scope_token_stack[prev_scope_token_stack_len-1];\
+        if (\
+            (strcmp(stack_top.text, "{")==0 && strcmp(TOKEN.text, "}")==0) ||\
+            (strcmp(stack_top.text, "[")==0 && strcmp(TOKEN.text, "]")==0) ||\
+            (strcmp(stack_top.text, "(")==0 && strcmp(TOKEN.text, ")")==0)   \
+        ) {\
+            popScopeTokenStack();\
+        } else {\
+            error_token_2(1, stack_top, TOKEN, "Mismatched pair of scope tokens: "\
+                            RED "`%s`" RESET " vs " RED "`%s`" RESET, stack_top.text, TOKEN.text);\
+        }\
+    }
+    #define printScopeTokenStack() {\
+        printf("ScopeTokenStack: ");\
+        printTokens(prev_scope_token_stack, prev_scope_token_stack_len);\
+    }
+
+    /**************************************************************************/
+    /* Building the parser tree ***********************************************/
     Token token_buffer[CASPIAN_MAX_TOKENS_IN_LINE];
     uint  token_buffer_len = 0;
 
@@ -185,6 +218,7 @@ SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CA
         uint  right_len = 0;
 
         do { /* `do` loop because `right_len` needs to be set by `splitAtScopeToken` */
+            // printScopeTokenStack();
             splitAtScopeToken(token_buffer, &token_buffer_len, right, &right_len);
 
             if (right_len > 0) { /* If the right_len is non-zero, we had hit a scope token and should process the left group */
@@ -204,12 +238,18 @@ SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CA
 
                     /* Now, start building the syntax tree */
                     if (  isUpScope(&back_token)) {
-                        SyntaxPtr closer = newSyntaxPtr(token_buffer+token_buffer_len-1, 1);
+                        const Token closer_token = token_buffer[token_buffer_len-1];
+                        compareScopeTokenToStack(closer_token);
+
+                        SyntaxPtr closer = newSyntaxPtr(&closer_token, 1);
                         addChild(current, closer); /* Add child BEFORE b/c the `closer` is a child of the current scope */
                         current = current->parent;
                     }
                     else if (isDownScope(&back_token)) {
-                        SyntaxPtr opener = newSyntaxPtr(token_buffer+token_buffer_len-1, 1);
+                        const Token opener_token = token_buffer[token_buffer_len-1];
+                        pushScopeTokenStack(opener_token);
+
+                        SyntaxPtr opener = newSyntaxPtr(&opener_token, 1);
                         addChild(current, opener); /* Add child AFTER b/c the `opener` is a child of the previous line */
                         current = opener;
                     }
@@ -222,6 +262,9 @@ SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CA
     }
     /* Clean-up the tokens remaining in the buffer so they aren't forgotten */
     if (token_buffer_len > 0) {
+        const Token back_token = backToken(token_buffer, token_buffer_len);
+        if (isScopeToken(&back_token)) compareScopeTokenToStack(back_token);
+
         SyntaxPtr child = newSyntaxPtr(token_buffer, token_buffer_len);
         addChild(current, child);
     }
