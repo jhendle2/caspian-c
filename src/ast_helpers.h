@@ -4,7 +4,7 @@
 #include "parser.h"
 
 #define AST_VERIFY(NAME) \
-    bool AST_VERIFY_##NAME(const SyntaxPtr sp)
+    bool AST_VERIFY_##NAME(SyntaxPtr sp)
 
 AST_VERIFY(FunctionHeader);
 AST_VERIFY(Typedef);

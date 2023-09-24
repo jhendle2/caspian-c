@@ -124,7 +124,8 @@ AstPtr buildAstTreeHelper(AstPtr current_astp, const SyntaxPtr current_sp) {
     }
 
     if (AST_VERIFY_FunctionHeader(current_sp)) {
-        // TODO: Implement
+        
+        return newAstPtr(AST_FUNCTION_HEADER, current_sp->tokens, current_sp->num_tokens);
     }
 
     if (AST_VERIFY_Typedef(current_sp)) {
@@ -150,12 +151,14 @@ AstPtr buildAstTreeRecursor(AstPtr current_astp, const SyntaxPtr current_sp) {
 
 AstPtr buildAstTree(const char* file_path) {
     SyntaxPtr master_sp = buildSyntaxTree(file_path);
-    // masterTreeSyntaxPtr(master_sp); printf("\n"); // TODO: Remove
+    masterTreeSyntaxPtr(master_sp); printf("\n"); // TODO: Remove
 
     AstPtr master_astp  = newMaster(file_path);
     AstPtr current_astp = master_astp;
+    gCurrentAstMaster   = master_astp;
 
     buildAstTreeRecursor(current_astp, master_sp);
+    masterTreeAstPtr(current_astp); printf("\n"); // TODO: Remove
     
     delSyntaxPtr(&master_sp);
     return master_astp;

@@ -19,6 +19,15 @@ void printFileLine(const FileLine* fl) {
     printf(BGREEN "%s:%u: " RESET "%s\n", fl->origin, fl->line_number, fl->text);
 }
 
+static bool isPreprocessorLine(const char* s) {
+    const char* t = s;
+    while (*t) {
+        if (*t == ' ' || *t == '\t') t++;
+        else if (*t == '#') return true;
+        else break;
+    } return false;
+}
+
 uint readFileAsLines(const char* file_path, FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE]) {
     uint num_lines_in_file = 0;
 
@@ -30,12 +39,13 @@ uint readFileAsLines(const char* file_path, FileLine file_as_lines[CASPIAN_MAX_L
     uint line_number = 0;
     char buf[CASPIAN_MAX_FILELINE_SZ];
     while ( fgets(buf, CASPIAN_MAX_FILELINE_SZ, fp) ) {
-        line_number++;                 /* Every line number is tracked, even blank ones */
+        line_number++;                    /* Every line number is tracked, even blank ones */
 
         char* stripped = buf;
         // char* stripped = lstrip(buf);  /* Drop the leading spaces so we can print properly later */
-        replace(stripped, '\n', '\0'); /* Drop the newline at the end of the fileline for printing */
-        if (empty(stripped)) continue; /* Ignore blank lines */
+        replace(stripped, '\n', '\0');    /* Drop the newline at the end of the fileline for printing */
+        if (empty(stripped)) continue;    /* Ignore blank lines */
+        if (isPreprocessorLine(stripped)) continue;
 
         file_as_lines[num_lines_in_file++] = newFileLine(line_number, file_path, stripped);
     }
@@ -46,18 +56,19 @@ uint readFileAsLines(const char* file_path, FileLine file_as_lines[CASPIAN_MAX_L
 
 /****************************************************************************************************/
 Token newToken(const uint offset, const FileLine* origin, const char* text) {
-    Token token = { .offset=offset, .origin=origin };
+    Token token = { .offset=offset, .origin=*origin};
     strncpy(token.text, text, CASPIAN_MAX_TOKEN_SZ);
     return token;
 }
 
+#include <assert.h>
 #define CASPIAN_MAX_TOKEN_HEADER_SZ (CASPIAN_MAX_PATH_SZ + 1 + CASPIAN_MAX_LINES_IN_FILE + 1 + CASPIAN_MAX_FILELINE_SZ + 2) /* Exact max we need */ 
 void printToken(const Token* token) {
-    const FileLine* fl = token->origin;
-    char temp[CASPIAN_MAX_TOKEN_HEADER_SZ];
-        snprintf(temp, CASPIAN_MAX_TOKEN_HEADER_SZ, "%s:%u:%u: ", fl->origin, fl->line_number, token->offset);
+    const FileLine fl = token->origin;
+    char temp[CASPIAN_MAX_TOKEN_HEADER_SZ] = "";
+        snprintf(temp, CASPIAN_MAX_TOKEN_HEADER_SZ, "%s:%u:%u: ", fl.origin, fl.line_number, token->offset);
     const uint header_len = strlen(temp), token_len = strlen(token->text);
-        printf(BGREEN "%s" RESET "%s\n", temp, fl->text);
+        printf(BGREEN "%s" RESET "%s\n", temp, fl.text);
         printf(BGREEN "%*c", header_len + token->offset - 1, ' '); /* Minus 1 because offset is counted started at 1, not 0 */
     for (uint i = 0; i<token_len; i++)
         printf("^");

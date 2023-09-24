@@ -24,7 +24,8 @@ uint     readFileAsLines(const char* file_path, FileLine file_as_lines[CASPIAN_M
 
 typedef struct {
     uint            offset;
-    const FileLine* origin;
+    // const FileLine* origin;
+    FileLine origin;
     char            text[CASPIAN_MAX_TOKEN_SZ];
 } Token;
 

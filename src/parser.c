@@ -69,7 +69,7 @@ void treeSyntaxPtr (const SyntaxPtr sp, const uint level) {
 
 static void addChild(SyntaxPtr parent, SyntaxPtr child) {
     if (parent->num_children >= (CASPIAN_MAX_SYNTAX_CHILDREN-1)) {
-        warning_line(*(child->tokens[0].origin), "Too many lines in this scope! Line will be ignored...");
+        warning_line(child->tokens[0].origin, "Too many lines in this scope! Line will be ignored...");
         // TODO: Safely exit here and clean-up all previous SyntaxPtrs? Or is a warning fine?
     }
 
@@ -127,7 +127,7 @@ void splitAtScopeToken( Token original[CASPIAN_MAX_TOKENS_IN_LINE], uint* origin
         if (isScopeToken( &(original[i]) )) {
             *right_len    = (*original_len)-i-1;               /* Slice scope token to end   */
             *original_len = i+1;                               /* Slice start to scope token */
-            copyTokens(right, original + i + 1, (*right_len)); /* Copy right tokens into right array */
+            copyTokens(right, original + (*original_len), (*right_len)); /* Copy right tokens into right array */
             return;
         }
     } *right_len = 0; /* If there was no scope token tell everyone else `right` isn't worth processing */

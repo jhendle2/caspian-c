@@ -132,9 +132,9 @@ bool isolateTypeAlias(const SyntaxPtr sp, Token* alias) {
         }
     }
 
-    /* Otherwise, maybe it's hiding at the end of this one's tokens */
+    /* Otherwise, maybe it's hiding at the end of this one's tokens         */
     if (cmpToken (alias, "*")) return false; /* Pointers aren't valid names */
-    if (isInteger(alias))      return false; /* Numbers aren't valid names */
+    if (isInteger(alias))      return false; /* Numbers  aren't valid names */
     if (
         cmpToken(alias, "(") || /* It's the start of a function pointer       */
         cmpToken(alias, ")") || /* It's the end of a function pointer         */

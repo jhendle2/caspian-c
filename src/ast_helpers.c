@@ -10,16 +10,38 @@ AST_VERIFY(FunctionHeader) {
             static inline const char* func(const char* str)
     */
 
-    // bool flag_static      = false;
-    // bool flag_inline      = false;
-    // bool flag_return_type = false;
-    // bool flag_name        = false;
-    // bool flag_open_paren  = false;
-    // bool flag_close_paren = false;
+    enum HeaderLevel {
+        F_STATIC=0,
+        F_INLINE,
+        F_RETURN_TYPE,
+        F_FN_NAME,
+        F_OPEN_PAREN,
+        F_PARAMS,
+        F_CLOSE_PAREN,
+    NUM_HEADER_LEVEL_FLAGS
+    };
+    int header_level = F_STATIC;
 
-    // foreachToken(token, tokens, num_tokens) {
-    //     printf("`%s` ", token.text);
-    // } printf("\n");
+    if (sp->num_children != 1)  return false; /* All function headers have one child, `(` */
+
+    for (uint i = 0; i<sp->num_tokens; i++) {
+        const Token token = sp->tokens[i];
+        // printToken(&token);
+
+        if (cmpToken(&token, "static")) {
+            if (header_level > F_STATIC)
+                error_token(1, token, "`static` must be first in function header.");
+            header_level++;
+        }
+
+        if (cmpToken(&token, "inline")) {
+            if (header_level > F_INLINE)
+                error_token(1, token, "`inline` must be second in function header.");
+            header_level++;
+        }
+
+        
+    }
 
     return true;
 }

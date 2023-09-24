@@ -1,9 +1,9 @@
 
 typedef const uint NewType0;
 typedef const uint**** NewType1[5];
-typedef const NewType0* (*NewType2)[2][3];
+typedef NewType0* (*NewType2)[2][3];
 
-typedef struct {
+typedef struct struct_t {
     int x, y, z;
     char string[128];
 } MyStruct;
@@ -14,7 +14,7 @@ typedef enum enum_t {
     BLUE
 } MyEnum;
 
-typedef union {
+typedef union union_t {
     int x;
     bool b;
 } Onion;
