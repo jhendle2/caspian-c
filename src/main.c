@@ -1,18 +1,14 @@
 #include <stdio.h>
 
-#include "color.h"
-#include "lexer.h"
 #include "error.h"
-#include "parser.h"
+#include "ast.h"
+#include "keywords.h"
 
 ExitCode processFile(const char* file_path) {
-    FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE];
-    uint num_file_lines = readFileAsLines(file_path, file_as_lines);
+    AstPtr master_astp = buildAstTree(file_path);
+    // masterTreeAstPtr(master_astp);
 
-    SyntaxPtr master = buildSyntaxTree(file_path, file_as_lines, num_file_lines);
-    masterTreeSyntaxPtr(master);
-
-    delSyntaxPtr(&master);
+    delAstPtr(&master_astp);
 
     return EXIT_SUCCESS;
 }

@@ -5,72 +5,158 @@
 #include <string.h>
 
 #include "error.h"
+#include "ast_helpers.h"
+#include "keywords.h"
+
+static const char* strAstOp[NUM_AST_OPS] = {
+    "INVALID",
+    "MASTER",
+    "NAMESPACE",
+
+    "VAR_INIT",
+
+    "FOR_LOOP",
+    "WHILE_LOOP",
+        
+    "CONTINUE",
+    "BREAK",
+    "GOTO",
+
+    "IF",
+    "ELSE",
+
+    "STRUCT",
+    "ENUM",
+    "UNION",
+
+    "TYPE_ALIAS",
+
+    "FUNCTION_HEADER",
+    "FUNCTION_CALL",
+    "RETURN",
+
+    "INTEGER_CONSTANT",
+    "STRING_CONSTANT",
+
+    "CAST",
+};
 
 uint gTotalAstNodes = 0;
-AstPtr newAstPtr(const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens) {
-    AstPtr sp = (AstPtr)malloc(sizeof(struct ast_node_s));
+AstPtr newAstPtr  (const enum AstOp op, const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens) {
+    AstPtr astp = (AstPtr)malloc(sizeof(struct ast_node_s));
     gTotalAstNodes++;
     
-    sp->parent = NULL;
+    astp->op = op;
+    astp->parent = NULL;
     
-    sp->num_children = 0;
+    astp->num_children = 0;
     for (uint i = 0; i<CASPIAN_MAX_AST_CHILDREN; i++)
-        sp->children[i] = NULL;
+        astp->children[i] = NULL;
 
-    sp->num_tokens = num_tokens;
-    copyTokens(sp->tokens, tokens, num_tokens);
+    astp->num_tokens = num_tokens;
+    copyTokens(astp->tokens, tokens, num_tokens);
 
-    return sp;
+    return astp;
 }
 
 static AstPtr newMaster(const char* file_path) {
-    const FileLine fl    = newFileLine(0, file_path, "#MASTER");
-    const Token    token = newToken   (0, &fl      , "#MASTER");
-    const Token    tokens[CASPIAN_MAX_TOKENS_IN_LINE] = {token};
-    return newAstPtr(tokens, 1);
+    generateMasterTokens(file_path, MASTER_TOKENS);
+    return newAstPtr(AST_MASTER, MASTER_TOKENS, 1);
 }
 
 uint gTotalAstFrees = 0;
-void delAstPtr(AstPtr* sp) {
-    if (*sp == NULL) return; // TODO: Realistically, this should never happen so it can probably be removed
+void delAstPtr(AstPtr* astp) {
+    if (*astp == NULL) return; // TODO: Realistically, this should never happen so it can probably be removed
 
-    (*sp)->parent = NULL;
-    for (uint i = 0; i<(*sp)->num_children; i++)
-        delAstPtr( &((*sp)->children[i]) );
+    (*astp)->parent = NULL;
+    for (uint i = 0; i<(*astp)->num_children; i++)
+        delAstPtr( &((*astp)->children[i]) );
 
-    free(*sp); gTotalAstFrees++;
-    *sp = NULL;
+    free(*astp); gTotalAstFrees++;
+    *astp = NULL;
 }
 
-void printAstPtr(const AstPtr sp) {
-    printf("(AstPtr):\n");
-    printf("tokens        = "); printTokens(sp->tokens, sp->num_tokens);
+void printAstPtr(const AstPtr astp) {
+    // printf("(AstPtr):\n");
+    // printf("tokens        = "); printTokens(astp->tokens, astp->num_tokens);
 
-    printf("parent        = ");
-        if (sp->parent) printTokens(sp->parent->tokens, sp->parent->num_tokens);
-        else printf("(none)\n");
+    // printf("parent        = ");
+    //     if (astp->parent) printTokens(astp->parent->tokens, astp->parent->num_tokens);
+    //     else printf("(none)\n");
 
-    printf("children(%3u) = ", sp->num_children);
-    if (sp->num_children==0) printf("(none)\n");
-    else                     printf("\n");
-    for (uint i = 0; i<sp->num_children; i++) {
-        printf(" * "); printTokens(sp->children[i]->tokens, sp->children[i]->num_tokens);
-    }
+    // printf("children(%3u) = ", astp->num_children);
+    // if (astp->num_children==0) printf("(none)\n");
+    // else                     printf("\n");
+    // for (uint i = 0; i<astp->num_children; i++) {
+    //     printf(" * "); printTokens(astp->children[i]->tokens, astp->children[i]->num_tokens);
+    // }
 
-    printf("\n");
+    // printf("\n");
 }
 
-void treeAstPtr (const AstPtr sp, const uint level) {
+void treeAstPtr (const AstPtr astp, const uint level) {
     for (uint i = 0; i<level; i++) printf("* ");
-    if (sp->num_children>0) printf("(%u) ", sp->num_children);
-    printTokens(sp->tokens, sp->num_tokens);
+    if (astp->num_children>0) printf("(%u) ", astp->num_children);
+    printf("AST(%s) : ", strAstOp[astp->op]);
+    printTokens(astp->tokens, astp->num_tokens);
 
-    for (uint c = 0; c<sp->num_children; c++)
-        treeAstPtr(sp->children[c], level+1);
+    for (uint c = 0; c<astp->num_children; c++)
+        treeAstPtr(astp->children[c], level+1);
 }
 
 static void addChild(AstPtr parent, AstPtr child) {
     child->parent = parent;
     parent->children[parent->num_children] = child;
     parent->num_children++;
+}
+
+/****************************************************************************************************/
+/* AST Building *************************************************************************************/
+
+AstPtr gCurrentAstMaster = NULL;
+
+AstPtr buildAstTreeHelper(AstPtr current_astp, const SyntaxPtr current_sp) {
+    /* Aliases for ease */
+    const Token first = frontToken(current_sp->tokens);
+
+    if (cmpToken(&first, MASTER_TOKEN_STR)) {
+        return newAstPtr(AST_NAMESPACE, current_sp->tokens, current_sp->num_tokens);
+    }
+
+    if (AST_VERIFY_FunctionHeader(current_sp)) {
+        // TODO: Implement
+    }
+
+    if (AST_VERIFY_Typedef(current_sp)) {
+        Token alias;
+        bool found = isolateTypeAlias(current_sp, &alias);
+        if (found) addTypeAlias(&alias, current_sp->tokens, current_sp->num_tokens);
+    }
+
+    return newAstPtr(AST_INVALID, current_sp->tokens, current_sp->num_tokens);
+}
+
+AstPtr buildAstTreeRecursor(AstPtr current_astp, const SyntaxPtr current_sp) {
+    AstPtr child_astp = buildAstTreeHelper(current_astp, current_sp);
+    addChild(current_astp, child_astp);
+    current_astp = child_astp;
+
+    for (uint i = 0; i<current_sp->num_children; i++) {
+        const SyntaxPtr child = current_sp->children[i];
+        buildAstTreeRecursor(current_astp, child);
+    }
+    return current_astp;
+}
+
+AstPtr buildAstTree(const char* file_path) {
+    SyntaxPtr master_sp = buildSyntaxTree(file_path);
+    // masterTreeSyntaxPtr(master_sp); printf("\n"); // TODO: Remove
+
+    AstPtr master_astp  = newMaster(file_path);
+    AstPtr current_astp = master_astp;
+
+    buildAstTreeRecursor(current_astp, master_sp);
+    
+    delSyntaxPtr(&master_sp);
+    return master_astp;
 }

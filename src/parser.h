@@ -20,6 +20,6 @@ void      printSyntaxPtr(const SyntaxPtr sp);
 void      treeSyntaxPtr (const SyntaxPtr sp, const uint level);
 #define masterTreeSyntaxPtr(MASTER) treeSyntaxPtr(MASTER, 0)
 
-SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines);
+SyntaxPtr buildSyntaxTree(const char* file_path);
 
 #endif /* CASPIAN_PARSER_H */

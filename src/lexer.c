@@ -64,6 +64,14 @@ void printToken(const Token* token) {
     printf(RESET "\n");
 }
 
+bool cmpToken(const Token* token, const char* str) {
+    return (strncmp(token->text, str, CASPIAN_MAX_TOKEN_SZ)==0);
+}
+
+bool cmpTokens(const Token* token, const Token* other) {
+    return (strncmp(token->text, other->text, CASPIAN_MAX_TOKEN_SZ)==0);
+}
+
 static bool isValidEscape(const char c) {
     switch (c) {
         case 'n' : case 'r' : case 't' : 
@@ -230,7 +238,7 @@ uint tokenizeLine(const FileLine* fl, Token tokens[CASPIAN_MAX_TOKENS_IN_LINE]) 
     return num_tokens;
 }
 
-#define BRIEF 5
+#define BRIEF 25
 void printTokens(const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint len) {
     uint i;
     for (i = 0; i<len && i<BRIEF; i++)
