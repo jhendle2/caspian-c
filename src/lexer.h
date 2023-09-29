@@ -44,6 +44,7 @@ void  splitTokens ( Token input[CASPIAN_MAX_TOKENS_IN_LINE], const uint input_le
                     Token left[CASPIAN_MAX_TOKENS_IN_LINE] , uint* left_len,
                     Token right[CASPIAN_MAX_TOKENS_IN_LINE], uint* right_len);
 Token popFrontTokens(Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], uint* num_tokens);
+uint  pushBackTokens(Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], uint num_tokens, const Token* pushed);
 
 #define NOT_FOUND -1
 int  findToken   (Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens, const char* find);

@@ -300,3 +300,12 @@ int findToken(Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens, c
     }
     return NOT_FOUND;
 }
+
+uint pushBackTokens(Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], uint num_tokens, const Token* push_token) {
+    num_tokens++;
+    if (num_tokens == CASPIAN_MAX_TOKENS_IN_LINE) {
+        error_token(1, *push_token, "Too many tokens in a single statement");
+    }
+    tokens[num_tokens-1] = (*push_token);
+    return num_tokens;
+}

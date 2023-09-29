@@ -146,7 +146,23 @@ SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CA
     Token token_buffer[CASPIAN_MAX_TOKENS_IN_LINE];
     uint num_tokens_in_buffer = 0;
 
-    Token last_block_comment_opener, last_scope_opener;
+    Token last_block_comment_opener;
+    Token last_scope_opener_stack[CASPIAN_MAX_TOKENS_IN_LINE];
+    uint  last_scope_opener_stack_index = 0;
+
+    #define backScopeStack() last_scope_opener_stack[last_scope_opener_stack_index-1]
+
+    #define pushToScopeStack(TOKEN) \
+        if (last_scope_opener_stack_index == CASPIAN_MAX_SYNTAX_DEPTH-1) {\
+            error_token(1, TOKEN, "Maximum scope depth has been reached. Please try and move these blocks into functions");\
+        }\
+        last_scope_opener_stack[last_scope_opener_stack_index++] = TOKEN;
+
+    #define popFromScopeStack() \
+        if (last_scope_opener_stack_index == 0) {\
+            error_token(1, last_scope_opener_stack[0], "Scope token mismatch. This should never happen!");\
+        } last_scope_opener_stack_index--;
+
     bool in_block_comment = false;
     for (uint i = 0; i<num_file_lines; i++) {
         const FileLine line_read = file_as_lines[i];
@@ -154,7 +170,7 @@ SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CA
         const uint num_tokens_read = tokenizeLine(&line_read, tokens_read);
 
         num_tokens_in_buffer = appendTokens(token_buffer, num_tokens_in_buffer, tokens_read, num_tokens_read);
-        // printf("\ntokens="); printTokens(token_buffer, num_tokens_in_buffer);
+        // if (num_tokens_in_buffer) { printf("\ntoken_buffer="); printTokens(token_buffer, num_tokens_in_buffer); }
 
         uint left_len=0, right_len=0;
         Token left[CASPIAN_MAX_TOKENS_IN_LINE], right[CASPIAN_MAX_TOKENS_IN_LINE];
@@ -171,6 +187,7 @@ SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CA
             // printf("left=");        printTokens(left, left_len);
             // printf("scope_token="); printTokens(&scope_token, 1);
             // printf("right=");       printTokens(right, right_len);
+            // printf("\n");
 
             const bool in_block_comment_opener = cmpToken(&scope_token, "/*");
             const bool in_block_comment_closer = cmpToken(&scope_token, "*/");
@@ -192,29 +209,36 @@ SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CA
                 in_block_comment = false;
             }
 
-            if (!in_block_comment && left_len > 0) {
-                SyntaxPtr left_stmt = newSyntaxPtr(left, left_len);
-                addChild(current, left_stmt);
-            }
-            
             if (!in_block_comment && !in_block_comment_closer) {
-                SyntaxPtr scope_ptr = newSyntaxPtr(&scope_token, 1);
+
+                const bool is_stmt = cmpToken(&scope_token, ";") || cmpToken(&scope_token, ",");
+                SyntaxPtr scope_ptr = (is_stmt)
+                                        ? newSyntaxPtr(left, /*left_len) */ pushBackTokens(left, left_len, &scope_token))
+                                        : newSyntaxPtr(&scope_token, 1);
+                
+                if (!is_stmt && left_len > 0) {
+                    SyntaxPtr left_ptr = newSyntaxPtr(left, left_len);
+                    addChild(current, left_ptr);
+                }
                 addChild(current, scope_ptr);
                 
                 if (isUpScope(&scope_token)) {
-                    if (!isMatchingScopeToken(&last_scope_opener, &scope_token)) {
-                        error_token_2(1, last_scope_opener, scope_token,
+                    if (!isMatchingScopeToken(&backScopeStack(), &scope_token)) {
+                        error_token_2(1, backScopeStack(), scope_token,
                             "The scope tokens `%s` and `%s` are a mismatch. Did you forget to close `%s`?",
-                            last_scope_opener.text, scope_token.text, last_scope_opener.text);
+                            backScopeStack().text, scope_token.text, backScopeStack().text);
                     }
+                    popFromScopeStack();
                     current = current->parent;
                 }
                 else if (isDownScope(&scope_token)) {
-                    last_scope_opener = scope_token;
+                    pushToScopeStack(scope_token);
+                    // printf("[SETTING LAST-SCOPE-OPENER `%s`]\n", backScopeStack().text);
                     current = scope_ptr;
                 }
-            }
 
+                // printf("\n");
+            }
             num_tokens_in_buffer = moveTokens(token_buffer, right, right_len);
         }
     }
@@ -222,7 +246,7 @@ SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CA
         error_token(1, last_block_comment_opener, "This block comment was never properly closed");
     }
     if (current != master) {
-        error_token(1, last_scope_opener, "This scope was never properly closed");
+        error_token(1, backScopeStack(), "This scope was never properly closed");
     }
 
     return master;

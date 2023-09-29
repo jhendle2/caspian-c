@@ -4,7 +4,8 @@
 #include "lexer.h"
 
 #define CASPIAN_MAX_SYNTAX_CHILDREN 512
-// #define CASPIAN_MAX_SYNTAX_DEPTH    32
+#define CASPIAN_MAX_SYNTAX_DEPTH    32
+// #define CASPIAN_MAX_SYNTAX_DEPTH    CASPIAN_MAX_TOKENS_IN_LINE
 
 typedef struct SyntaxNode {
     uint num_tokens, num_children;
