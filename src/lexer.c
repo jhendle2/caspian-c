@@ -264,9 +264,39 @@ uint copyTokens(Token a[CASPIAN_MAX_TOKENS_IN_LINE], const Token b[CASPIAN_MAX_T
     return len;
 }
 
+uint moveTokens(Token a[CASPIAN_MAX_TOKENS_IN_LINE], Token b[CASPIAN_MAX_TOKENS_IN_LINE], const uint len) {
+    memmove(a, b, len * sizeof(Token));
+    return len;
+}
+
 uint appendTokens(Token a[CASPIAN_MAX_TOKENS_IN_LINE], const uint a_len, const Token b[CASPIAN_MAX_TOKENS_IN_LINE], const uint b_len) {
     uint len = (a_len + b_len) % CASPIAN_MAX_TOKENS_IN_LINE;
     for (uint a_i = a_len, b_i = 0; a_i<len; a_i++, b_i++)
         a[a_i] = b[b_i];
     return len;
+}
+
+void splitTokens(Token input[CASPIAN_MAX_TOKENS_IN_LINE], const uint input_len, const uint split_index,
+                 Token left[CASPIAN_MAX_TOKENS_IN_LINE] , uint* left_len,
+                 Token right[CASPIAN_MAX_TOKENS_IN_LINE], uint* right_len) {
+    *left_len  = split_index + 1;
+    *right_len = input_len - split_index - 1;    
+    moveTokens(left, input, *left_len);
+    moveTokens(right, input + (*left_len), (*right_len) );
+}
+
+Token popFrontTokens(Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], uint* num_tokens) {
+    Token popped = tokens[0];
+    Token temp[CASPIAN_MAX_TOKENS_IN_LINE];
+    (*num_tokens)--;
+    memmove(temp  , tokens+1, sizeof(Token)*(*num_tokens));
+    memmove(tokens, temp    , sizeof(Token)*(*num_tokens));
+    return popped;
+}
+
+int findToken(Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens, const char* find) {
+    for (uint i = 0; i<num_tokens; i++) {
+        if (cmpToken( &(tokens[i]), find )) return i;
+    }
+    return NOT_FOUND;
 }

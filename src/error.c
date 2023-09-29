@@ -1,7 +1,7 @@
 #include "error.h"
 
-#include "parser.h"
-#include "ast.h"
+#include "parser2.h"
+// #include "ast.h"
 
 void safeExit(const ExitCode exit_code) {
     printf("[[[PREMATURE EXIT!]]]\n");
@@ -13,10 +13,10 @@ void safeExit(const ExitCode exit_code) {
     printf("Succesfully cleaned-up [%u/%u] in `gCurrentSyntaxMaster`\n", gTotalSyntaxFrees, gTotalSyntaxNodes);
     
     /********************************************************************/
-    extern AstPtr gCurrentAstMaster;
-    extern uint gTotalAstNodes, gTotalAstFrees;
-    delAstPtr(&gCurrentAstMaster);
-    printf("Succesfully cleaned-up [%u/%u] in `gCurrentAstMaster`\n", gTotalAstFrees, gTotalAstNodes);
+    // extern AstPtr gCurrentAstMaster;
+    // extern uint gTotalAstNodes, gTotalAstFrees;
+    // delAstPtr(&gCurrentAstMaster);
+    // printf("Succesfully cleaned-up [%u/%u] in `gCurrentAstMaster`\n", gTotalAstFrees, gTotalAstNodes);
 
     /********************************************************************/
     

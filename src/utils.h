@@ -9,6 +9,8 @@ bool  isWhitespace(const char c);
 
 /* Token Utils */
 #include "lexer.h"
+bool isAlpha(const char c);
+bool isDigit(const char c);
 bool isInteger(const Token* token);
 
 #endif /* CASPIAN_UTILS_H */

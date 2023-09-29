@@ -19,7 +19,14 @@ void replace(char* s, const char original, const char replacement) {
 bool empty       (const char* s) { return !*s; }
 bool isWhitespace(const char c)  { return c==' ' || c=='\t' || c=='\n' || c=='\r'; }
 
-static inline bool isDigit(const char c) {
+bool isAlpha(const char c) {
+    return (
+        (c >= 'A' && c <= 'Z') ||
+        (c >= 'a' && c <= 'z')
+    );
+}
+
+bool isDigit(const char c) {
     return (c >= '0' && c <= '9');
 }
 
