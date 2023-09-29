@@ -4,7 +4,7 @@
 #include "error.h"
 // #include "ast.h"
 #include "keywords.h"
-#include "parser2.h"
+#include "parser.h"
 
 ExitCode processFile(const char* file_path) {
 

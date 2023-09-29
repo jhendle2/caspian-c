@@ -1,72 +1,71 @@
 #include "parser.h"
 
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #include "error.h"
 
-uint gTotalSyntaxNodes = 0;
+SyntaxPtr gCurrentSyntaxMaster = NULL;
+uint gTotalSyntaxNodes, gTotalSyntaxFrees;
+
 SyntaxPtr newSyntaxPtr(const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens) {
-    SyntaxPtr sp = (SyntaxPtr)malloc(sizeof(struct syntax_node_s));
+    SyntaxPtr sp = (SyntaxPtr)malloc(sizeof(struct SyntaxNode));
+    if (sp == NULL) error_token(1, tokens[0], "System ran out of memory and no new syntax nodes could be allocated");
+
     gTotalSyntaxNodes++;
-    
-    sp->parent = NULL;
-    
-    sp->num_children = 0;
-    for (uint i = 0; i<CASPIAN_MAX_SYNTAX_CHILDREN; i++)
-        sp->children[i] = NULL;
 
     sp->num_tokens = num_tokens;
     copyTokens(sp->tokens, tokens, num_tokens);
 
+    sp->parent = NULL;
+
+    sp->num_children = 0;
+    for (uint i = 0; i<CASPIAN_MAX_SYNTAX_CHILDREN; i++)
+        sp->children[i] = NULL;
+        
     return sp;
+}
+
+void delSyntaxPtr(SyntaxPtr* sp) {
+    if (!sp || !*sp) return;
+
+    (*sp)->parent = NULL;
+    for (uint i = 0; i<(*sp)->num_children; i++)
+        delSyntaxPtr( &(*sp)->children[i] );
+
+    free(*sp);
+    gTotalSyntaxFrees++;
+    *sp = NULL;
+}
+
+
+void printSyntaxPtr(const SyntaxPtr sp) {
+    printf("\n(SyntaxPtr):\n");
+    printf("Parent: ");
+        if (sp->parent) printTokens(sp->parent->tokens, sp->parent->num_tokens);
+        else            printf("(null)\n");
+    printf("Tokens: ");
+        printTokens(sp->tokens, sp->num_tokens);
+    printf("Children (%u): ", sp->num_children);
+    if (sp->num_children) {
+        for (uint i = 0; i<sp->num_children; i++) {
+            printf("(%u) ", i); printTokens(sp->children[i]->tokens, sp->children[i]->num_tokens);
+        }
+    } else printf("(none)\n");
+    printf("(EndSyntaxPtr)\n");
+}
+
+void treeSyntaxPtr (const SyntaxPtr sp, const uint level) {
+    for (uint i = 0; i<level+1; i++) printf("* ");
+    printTokens(sp->tokens, sp->num_tokens);
+    for (uint i = 0; i<sp->num_children; i++) {
+        treeSyntaxPtr(sp->children[i], level+1);
+    }
 }
 
 static SyntaxPtr newMaster(const char* file_path) {
     generateMasterTokens(file_path, MASTER_TOKENS);
     return newSyntaxPtr(MASTER_TOKENS, 1);
 }
-
-uint gTotalSyntaxFrees = 0;
-void delSyntaxPtr(SyntaxPtr* sp) {
-    if (*sp == NULL) return; // TODO: Realistically, this should never happen so it can probably be removed
-
-    (*sp)->parent = NULL;
-    for (uint i = 0; i<(*sp)->num_children; i++)
-        delSyntaxPtr( &((*sp)->children[i]) );
-
-    free(*sp); gTotalSyntaxFrees++;
-    *sp = NULL;
-}
-
-void printSyntaxPtr(const SyntaxPtr sp) {
-    printf("(SyntaxPtr):\n");
-    printf("tokens        = "); printTokens(sp->tokens, sp->num_tokens);
-
-    printf("parent        = ");
-        if (sp->parent) printTokens(sp->parent->tokens, sp->parent->num_tokens);
-        else printf("(none)\n");
-
-    printf("children(%3u) = ", sp->num_children);
-    if (sp->num_children==0) printf("(none)\n");
-    else                     printf("\n");
-    for (uint i = 0; i<sp->num_children; i++) {
-        printf(" * "); printTokens(sp->children[i]->tokens, sp->children[i]->num_tokens);
-    }
-
-    printf("\n");
-}
-
-void treeSyntaxPtr (const SyntaxPtr sp, const uint level) {
-    for (uint i = 0; i<level; i++) printf("* ");
-    if (sp->num_children>0) printf("(%u) ", sp->num_children);
-    printTokens(sp->tokens, sp->num_tokens);
-
-    for (uint c = 0; c<sp->num_children; c++)
-        treeSyntaxPtr(sp->children[c], level+1);
-}
-
 static void addChild(SyntaxPtr parent, SyntaxPtr child) {
     if (parent->num_children >= (CASPIAN_MAX_SYNTAX_CHILDREN-1)) {
         warning_line(child->tokens[0].origin, "Too many lines in this scope! Line will be ignored...");
@@ -78,212 +77,192 @@ static void addChild(SyntaxPtr parent, SyntaxPtr child) {
     parent->num_children++;
 }
 
-static inline bool isBlockCommentOpen (const Token* token) { return strcmp(token->text, "/*") == 0; }
-static inline bool isBlockCommentClose(const Token* token) { return strcmp(token->text, "*/") == 0; }
-static inline bool isBlockComment     (const Token* token) {
+static inline bool isDownScope(const Token* token_ptr) {
     return (
-        isBlockCommentOpen(token)  ||
-        isBlockCommentClose(token)
+        cmpToken(token_ptr, "/*") ||
+        cmpToken(token_ptr, "{")  ||
+        cmpToken(token_ptr, "[")  ||
+        cmpToken(token_ptr, "(")  ||
+        
+        cmpToken(token_ptr, "typedef")  ||
+        cmpToken(token_ptr, "struct")  ||
+        cmpToken(token_ptr, "union")  ||
+        cmpToken(token_ptr, "enum")
+    );
+}
+static inline bool isUpScope(const Token* token_ptr) {
+    return (
+        cmpToken(token_ptr, "*/") ||
+        cmpToken(token_ptr, "}")  ||
+        cmpToken(token_ptr, "]")  ||
+        cmpToken(token_ptr, ")")
+    );
+}
+static inline bool isScopeToken(const Token* token_ptr) {
+    return (
+        cmpToken(token_ptr, "/*") ||
+        cmpToken(token_ptr, "*/") ||
+        cmpToken(token_ptr, ";")  ||
+        cmpToken(token_ptr, ",")  ||
+        cmpToken(token_ptr, "{")  ||
+        cmpToken(token_ptr, "[")  ||
+        cmpToken(token_ptr, "(")  ||
+        cmpToken(token_ptr, "}")  ||
+        cmpToken(token_ptr, "]")  ||
+        cmpToken(token_ptr, ")")
     );
 }
 
-static inline bool isUpScope(const Token* token) {
-    return (
-        (strcmp(token->text, "}") == 0) ||
-        (strcmp(token->text, "]") == 0) ||
-        (strcmp(token->text, ")") == 0) ||
-        isBlockCommentClose(token)
-    );
-}
-static inline bool isDownScope(const Token* token) {
-    return (
-        (strcmp(token->text, "{") == 0) ||
-        (strcmp(token->text, "[") == 0) ||
-        (strcmp(token->text, "(") == 0) ||
-        isBlockCommentOpen (token)
-    );
-}
-static inline bool isStatementEnd     (const Token* token) {
-    return (
-        (strcmp(token->text, ";") == 0) ||
-        (strcmp(token->text, ",") == 0)
-    );
-}
-static inline bool isScopeToken       (const Token* token) {
-    return (
-        isUpScope          (token) ||
-        isDownScope        (token) ||
-        isStatementEnd     (token)
-    );
-}
+static bool splitAtScopeFirstToken(
+        Token  tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint  tokens_len,
+        Token* scope_token,
+        Token  left  [CASPIAN_MAX_TOKENS_IN_LINE],       uint* left_len,
+        Token  right [CASPIAN_MAX_TOKENS_IN_LINE],       uint* right_len
+) {
+    for (uint i = 0; i<tokens_len; i++) {
+        const Token current_token = tokens[i];
+        if (isScopeToken(&current_token)) {
+            *left_len  = i;
+            *right_len = tokens_len-i-1;
 
-void splitAtScopeToken( Token original[CASPIAN_MAX_TOKENS_IN_LINE], uint* original_len,
-                        Token    right[CASPIAN_MAX_TOKENS_IN_LINE], uint* right_len) {
-    /*
-        Splits a list of tokens at the first scope token
-        into two left and right lists of tokens.
-    */
-    for (uint i = 0; i<(*original_len); i++) {
-        if (isScopeToken( &(original[i]) )) {
-            *right_len    = (*original_len)-i-1;               /* Slice scope token to end   */
-            *original_len = i+1;                               /* Slice start to scope token */
-            copyTokens(right, original + (*original_len), (*right_len)); /* Copy right tokens into right array */
-            return;
+            *scope_token = current_token;
+            moveTokens(left , tokens    , *left_len );
+            moveTokens(right, tokens+(*left_len)+1, *right_len);
+            
+            return true;
         }
-    } *right_len = 0; /* If there was no scope token tell everyone else `right` isn't worth processing */
+    }
+    *left_len  = 0;
+    *right_len = 0;
+    return false;
 }
 
-#include <assert.h>
-SyntaxPtr gCurrentSyntaxMaster = NULL;
-SyntaxPtr buildSyntaxTree(const char* file_path) {
-    /*
-        Builds a syntax tree following the conventions of ANSI-C grammar.
+static bool isMatchingScopeToken(const Token* opener, const Token* closer) {
+    return (
+        (cmpToken(opener, "{") && cmpToken(closer, "}")) ||
+        (cmpToken(opener, "[") && cmpToken(closer, "]")) ||
+        (cmpToken(opener, "(") && cmpToken(closer, ")"))
+    );
+}
 
-        1) A `master` node is generated and a `current` node to track our
-            position in the syntax tree.
-
-        2) Lines are read from a list of FileLines which are then tokenized.
-
-        3) These tokens are appended to a buffer (`token_buffer`).
-
-        4) While the buffer contains a "scope" token ('{', '}', ';', or ','),
-            a) The buffer is split in half at the first scope token -> `token_buffer` & `right`
-            b) The left half is processed into a syntax node (`child`).
-                i) This `child` node is added as a child to the `current` node.
-                ii) Adjust the `current` node based on a criteria:
-                    1) If the new `child` node opens a new scope (ends in '{'):
-                        the `current` node moves "down" to the become the new `child`.
-                    2) If the new `child` node closes the current scope (ends in '}'):
-                        the `current` node moves "up" to its `parent` node.
-                    3) If the new `child` node is a statement (ends in ';' or ','):
-                        do nothing special.
-
-        5) Once no more lines left to be read, append one final `child` node from
-            any remaining tokens in the `token_buffer`.
-
-        6) Return the `master` node, which points to the very top node in the syntax tree.
-    */
-    SyntaxPtr master     = newMaster(file_path); /* Head syntax node for the entire file */
-    SyntaxPtr current    = master;               /* Keeps track of the current node in the syntax tree */
-    gCurrentSyntaxMaster = master;               /* For `safeExit` to function properly */
-
-    /**************************************************************************/
-    /* Setup for later syntax checking ****************************************/
-    Token prev_scope_token_stack[CASPIAN_MAX_SYNTAX_CHILDREN];
-    uint  prev_scope_token_stack_len = 0;
-
-    #define pushScopeTokenStack(TOKEN) {\
-        if (prev_scope_token_stack_len>=CASPIAN_MAX_SYNTAX_DEPTH) {\
-            warning_token(TOKEN, "Token exceeds scope depth and will be ignored.");\
-        } else prev_scope_token_stack[prev_scope_token_stack_len++] = TOKEN;\
-    }
-    #define popScopeTokenStack(TOKEN) prev_scope_token_stack_len--
-    #define compareScopeTokenToStack(TOKEN) {\
-        if (prev_scope_token_stack_len==0) error_token(1, TOKEN, "Closing scope token without previously opening one");\
-        const Token stack_top = prev_scope_token_stack[prev_scope_token_stack_len-1];\
-        if (\
-            (cmpToken(&stack_top, "{") && cmpToken(&TOKEN, "}")) ||\
-            (cmpToken(&stack_top, "[") && cmpToken(&TOKEN, "]")) ||\
-            (cmpToken(&stack_top, "(") && cmpToken(&TOKEN, ")"))   \
-        ) {\
-            popScopeTokenStack();\
-        } else {\
-            error_token_2(1, stack_top, TOKEN, "Mismatched pair of scope tokens: "\
-                            RED "`%s`" RESET " vs " RED "`%s`" RESET, stack_top.text, TOKEN.text);\
-        }\
-    }
-    #define printScopeTokenStack() {\
-        printf("ScopeTokenStack: ");\
-        printTokens(prev_scope_token_stack, prev_scope_token_stack_len);\
-    }
-
-    /**************************************************************************/
-    /* Building the parser tree ***********************************************/
-    FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE];
-    uint num_file_lines = readFileAsLines(file_path, file_as_lines); /* Generate list of usable file lines */
+SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines) {
+    SyntaxPtr master     = newMaster(file_path);
+    SyntaxPtr current    = master;
+    gCurrentSyntaxMaster = master;
 
     Token token_buffer[CASPIAN_MAX_TOKENS_IN_LINE];
-    uint  token_buffer_len = 0;
+    uint num_tokens_in_buffer = 0;
 
+    Token last_block_comment_opener = newToken(0, &(file_as_lines[0]), "");
+    Token last_scope_opener_stack[CASPIAN_MAX_TOKENS_IN_LINE];
+    uint  last_scope_opener_stack_index = 0;
+
+    #define backScopeStack() \
+        last_scope_opener_stack[(last_scope_opener_stack_index>0) ? last_scope_opener_stack_index-1 : 0]
+
+    #define pushToScopeStack(TOKEN) {\
+        if (last_scope_opener_stack_index == CASPIAN_MAX_SYNTAX_DEPTH-1) {\
+            error_token(1, TOKEN, "Maximum scope depth has been reached. Please try and move these blocks into functions");\
+        }\
+        last_scope_opener_stack[last_scope_opener_stack_index++] = TOKEN;\
+    }
+
+    #define popFromScopeStack() {\
+        if (last_scope_opener_stack_index == 0) {\
+            error_token(1, last_scope_opener_stack[0], "[COMPILER-BUG] Scope token mismatch. This should never happen!");\
+        }\
+        last_scope_opener_stack_index--;\
+    }
+
+    bool in_block_comment = false;
     for (uint i = 0; i<num_file_lines; i++) {
-        /* Read a line as tokens */
-        Token tokens[CASPIAN_MAX_TOKENS_IN_LINE];
-        const FileLine fl = file_as_lines[i];
-        uint num_tokens   = tokenizeLine(&fl, tokens);
-        if (num_tokens == 0) continue; /* Ignore blank lines with no tokens */
+        const FileLine line_read = file_as_lines[i];
+        Token tokens_read[CASPIAN_MAX_TOKENS_IN_LINE];
+        const uint num_tokens_read = tokenizeLine(&line_read, tokens_read);
 
-        /* Append the tokens to the buffer so we have a continuous stream */
-        token_buffer_len = appendTokens(token_buffer, token_buffer_len, tokens, num_tokens);
+        num_tokens_in_buffer = appendTokens(token_buffer, num_tokens_in_buffer, tokens_read, num_tokens_read);
+        // if (num_tokens_in_buffer) { printf("\ntoken_buffer="); printTokens(token_buffer, num_tokens_in_buffer); }
 
-        /* Split at scope up or down tokens */
-        Token right[CASPIAN_MAX_TOKENS_IN_LINE];
-        uint  right_len = 0;
+        uint left_len=0, right_len=0;
+        Token left[CASPIAN_MAX_TOKENS_IN_LINE], right[CASPIAN_MAX_TOKENS_IN_LINE];
+        Token scope_token;
 
-        do { /* `do` loop because `right_len` needs to be set by `splitAtScopeToken` */
-            // printScopeTokenStack(); // TODO: Remove
-            splitAtScopeToken(token_buffer, &token_buffer_len, right, &right_len);
+        while (
+            splitAtScopeFirstToken(
+                token_buffer, num_tokens_in_buffer,
+                &scope_token,
+                left , &left_len,
+                right, &right_len
+            )
+        ) {
+            // printf("left=");        printTokens(left, left_len);
+            // printf("scope_token="); printTokens(&scope_token, 1);
+            // printf("right=");       printTokens(right, right_len);
+            // printf("\n");
 
-            if (right_len > 0) { /* If the right_len is non-zero, we had hit a scope token and should process the left group */
-                const Token back_token  = backToken (token_buffer, token_buffer_len);
-                // const Token front_token = frontToken(token_buffer);
-                
-                if (cmpToken(&back_token, ";")) token_buffer_len--; // FIXME: I feel like this isn't the correct place for this? Maybe it is b/c it works?
+            const bool in_block_comment_opener = cmpToken(&scope_token, "/*");
+            const bool in_block_comment_closer = cmpToken(&scope_token, "*/");
 
-                if (
-                    (token_buffer_len > 0)       &&  /* This should never happen anyhow */
-                    !isBlockComment(&back_token)     /* Ignore all block comments       */
-                    // !cmpToken(&front_token, ";")  /* Ignore all stray semicolons because they don't affect the program */
-                ) {
-                    const uint child_len = token_buffer_len - (isStatementEnd(&back_token) ? 0 : 1); // FIXME: This is ugly and should be changed
-                    SyntaxPtr child = NULL;
-                    if (child_len > 0) {
-                        child = newSyntaxPtr(token_buffer, child_len);
-                        addChild(current, child);
-                    }
+            /*
+                Updates a flag `is_block_comment` based on whether or not we just
+                opened or closed a block comment.
+                Tracks if a block comment was just closed because then we need to
+                dump all the `left` tokens b/c they occurred within a comment.
+            */
+            if (in_block_comment_opener) {
+                last_block_comment_opener = scope_token;
+                if (in_block_comment) {
+                    error_token_2(1, last_block_comment_opener, scope_token, "Nested block comments are invalid");
+                }
+                in_block_comment = true;
+                num_tokens_in_buffer = moveTokens(token_buffer, right, right_len);
+            }
+            if (in_block_comment_closer) {
+                if (!in_block_comment) {
+                    error_token(1, scope_token, "Attempted to close a block comment without previously opening one. Did you forget a `*/`?");
+                }
+                num_tokens_in_buffer = moveTokens(token_buffer, right, right_len);
+                left_len = 0; /* Effectively dumps all tokens in the `left` buffer */
+                in_block_comment = false;
+            }
 
-                    /* Now, start building the syntax tree */
-                    if (  isUpScope(&back_token)) {
-                        const Token closer_token = token_buffer[token_buffer_len-1];
-                        compareScopeTokenToStack(closer_token);
-
-                        SyntaxPtr closer = newSyntaxPtr(&closer_token, 1);
-                        addChild(current, closer);
-
-                        if (
-                            current->parent->num_children == 1 &&
-                            !cmpToken(&back_token, "}")         /* Keeps typedef structs, enums, and unions happy */
-                        )
-                            current = current->parent->parent;  /* Because SyntaxPtrs hold their open scope as their first child 
-                                                                ex: PARENT -> ... -> func -> { -> ... -> } -> ...
-                                                                So we need to escape twice from a close to get back to their parent */
-                        else current = current->parent;
-                    }
-                    else if (isDownScope(&back_token)) {
-                        const Token opener_token = token_buffer[token_buffer_len-1];
-                        pushScopeTokenStack(opener_token);
-
-                        SyntaxPtr opener = newSyntaxPtr(&opener_token, 1);
-                        if (child != NULL) current = child; // FIXME: Explain why this works? Dark magic...
-                        
-                        addChild(current, opener);
-                        current = opener;
-                    }
+            if (!in_block_comment && !in_block_comment_closer) { /* Required to ignore all tokens between block comment delimiters */
+                /*
+                    This routine will append `;` and `,` to the previous statement.
+                    However, if this results in a floating `;` or `,` scope,
+                    it will eliminate them b/c they're not necessary.
+                */
+                const bool is_stmt = cmpToken(&scope_token, ";") || cmpToken(&scope_token, ",");
+                if (left_len == 0 && is_stmt) {
+                    num_tokens_in_buffer = moveTokens(token_buffer, right, right_len);
+                    continue; /* Eliminates floating statement delimiter statements */
                 }
 
-                token_buffer_len = copyTokens(token_buffer, right, right_len); /* Shift the right into the left so we can repeat this process */
+                SyntaxPtr scope_ptr = newSyntaxPtr(left, pushBackTokens(left, left_len, &scope_token));
+                addChild(current, scope_ptr);
+                
+                if (isUpScope(&scope_token)) {
+                    if (!isMatchingScopeToken(&backScopeStack(), &scope_token)) {
+                        error_token_2(1, backScopeStack(), scope_token,
+                            "The scope tokens `%s` and `%s` are a mismatch. Did you forget to close `%s`?",
+                            backScopeStack().text, scope_token.text, backScopeStack().text);
+                    }
+                    popFromScopeStack();
+                    current = current->parent;
+                }
+                else if (isDownScope(&scope_token)) {
+                    pushToScopeStack(scope_token);
+                    current = scope_ptr;
+                }
             }
-        } while (right_len > 0);
-
+            num_tokens_in_buffer = moveTokens(token_buffer, right, right_len);
+        }
     }
-    /* Clean-up the tokens remaining in the buffer so they aren't forgotten */
-    if (token_buffer_len > 0) {
-        const Token back_token = backToken(token_buffer, token_buffer_len);
-        if (isUpScope(&back_token)) compareScopeTokenToStack(back_token);
-
-        if (cmpToken(&back_token, ";")) token_buffer_len--;
-
-        SyntaxPtr child = newSyntaxPtr(token_buffer, token_buffer_len);
-        addChild(current, child);
+    if (in_block_comment) {
+        error_token(1, last_block_comment_opener, "This block comment was never properly closed");
+    }
+    if (current != master) {
+        error_token(1, backScopeStack(), "This scope was never properly closed");
     }
 
     return master;

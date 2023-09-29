@@ -1,12 +1,15 @@
 #ifndef CASPIAN_LEXER_H
 #define CASPIAN_LEXER_H
 
+#include <stdbool.h>
 #include "common.h"
 
 /****************************************************************************************************/
 #define CASPIAN_MAX_PATH_SZ       64
-#define CASPIAN_MAX_FILELINE_SZ   128
+#define CASPIAN_MAX_FILELINE_SZ   512
 #define CASPIAN_MAX_LINES_IN_FILE 1024
+
+#define CASPIAN_DISABLE_PREPROCESSOR true
 
 typedef struct {
     uint line_number;
@@ -19,8 +22,8 @@ void     printFileLine  (const FileLine* fl);
 uint     readFileAsLines(const char* file_path, FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE]);
 
 /****************************************************************************************************/
-#define CASPIAN_MAX_TOKEN_SZ       32
-#define CASPIAN_MAX_TOKENS_IN_LINE 256
+#define CASPIAN_MAX_TOKEN_SZ       256
+#define CASPIAN_MAX_TOKENS_IN_LINE 128
 
 typedef struct {
     uint            offset;
@@ -39,12 +42,12 @@ void  printTokens (const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint le
 uint  copyTokens  (Token a[CASPIAN_MAX_TOKENS_IN_LINE], const Token b[CASPIAN_MAX_TOKENS_IN_LINE], const uint len);
 uint  moveTokens  (Token a[CASPIAN_MAX_TOKENS_IN_LINE], Token b[CASPIAN_MAX_TOKENS_IN_LINE], const uint len);
 
-uint  appendTokens(Token a[CASPIAN_MAX_TOKENS_IN_LINE], const uint a_len, const Token b[CASPIAN_MAX_TOKENS_IN_LINE], const uint b_len);
-void  splitTokens ( Token input[CASPIAN_MAX_TOKENS_IN_LINE], const uint input_len, const uint split_index,
-                    Token left[CASPIAN_MAX_TOKENS_IN_LINE] , uint* left_len,
-                    Token right[CASPIAN_MAX_TOKENS_IN_LINE], uint* right_len);
+uint  appendTokens  (Token a     [CASPIAN_MAX_TOKENS_IN_LINE], const uint a_len, const Token b[CASPIAN_MAX_TOKENS_IN_LINE], const uint b_len);
+void  splitTokens   (Token input [CASPIAN_MAX_TOKENS_IN_LINE], const uint input_len, const uint split_index,
+                     Token left  [CASPIAN_MAX_TOKENS_IN_LINE], uint* left_len,
+                     Token right [CASPIAN_MAX_TOKENS_IN_LINE], uint* right_len);
 Token popFrontTokens(Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], uint* num_tokens);
-uint  pushBackTokens(Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], uint num_tokens, const Token* pushed);
+uint  pushBackTokens(Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], uint num_tokens, const Token* push_token);
 
 #define NOT_FOUND -1
 int  findToken   (Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens, const char* find);

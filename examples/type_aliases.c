@@ -18,3 +18,7 @@ typedef union union_t {
     int x;
     bool b;
 } Onion;
+
+struct S {
+    int a, b, c;
+};

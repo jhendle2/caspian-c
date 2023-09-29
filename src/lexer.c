@@ -12,6 +12,7 @@ FileLine newFileLine(const uint line_number, const char* origin, const char* tex
     FileLine fl = { .line_number = line_number };
     strncpy(fl.origin, origin, CASPIAN_MAX_PATH_SZ    );
     strncpy(fl.text  , text  , CASPIAN_MAX_FILELINE_SZ);
+    fl.text[CASPIAN_MAX_FILELINE_SZ-1] = 0;
     return fl;
 }
 
@@ -39,15 +40,22 @@ uint readFileAsLines(const char* file_path, FileLine file_as_lines[CASPIAN_MAX_L
     uint line_number = 0;
     char buf[CASPIAN_MAX_FILELINE_SZ];
     while ( fgets(buf, CASPIAN_MAX_FILELINE_SZ, fp) ) {
+        buf[CASPIAN_MAX_FILELINE_SZ-1] = 0;
         line_number++;                    /* Every line number is tracked, even blank ones */
 
         char* stripped = buf;
         // char* stripped = lstrip(buf);  /* Drop the leading spaces so we can print properly later */
         replace(stripped, '\n', '\0');    /* Drop the newline at the end of the fileline for printing */
         if (empty(stripped)) continue;    /* Ignore blank lines */
-        if (isPreprocessorLine(stripped)) continue;
+        if (CASPIAN_DISABLE_PREPROCESSOR && isPreprocessorLine(stripped)) continue;
 
-        file_as_lines[num_lines_in_file++] = newFileLine(line_number, file_path, stripped);
+        const FileLine read_line = newFileLine(line_number, file_path, stripped);
+        // printFileLine(&read_line);
+
+        if (num_lines_in_file >= CASPIAN_MAX_LINES_IN_FILE-1) {
+            error_line(1, read_line, "Too many lines in file. Maximum is currently set to [%u].", CASPIAN_MAX_LINES_IN_FILE);
+        }
+        file_as_lines[num_lines_in_file++] = read_line;
     }
 
     fclose(fp);
@@ -58,11 +66,11 @@ uint readFileAsLines(const char* file_path, FileLine file_as_lines[CASPIAN_MAX_L
 Token newToken(const uint offset, const FileLine* origin, const char* text) {
     Token token = { .offset=offset, .origin=*origin};
     strncpy(token.text, text, CASPIAN_MAX_TOKEN_SZ);
+    token.text[CASPIAN_MAX_TOKEN_SZ-1] = 0;
     return token;
 }
 
-#include <assert.h>
-#define CASPIAN_MAX_TOKEN_HEADER_SZ (CASPIAN_MAX_PATH_SZ + 1 + CASPIAN_MAX_LINES_IN_FILE + 1 + CASPIAN_MAX_FILELINE_SZ + 2) /* Exact max we need */ 
+#define CASPIAN_MAX_TOKEN_HEADER_SZ (CASPIAN_MAX_PATH_SZ + 1 + 5 + 1 + 5 + 2) /* PATH + COLON + 5-digits + COLON + 5-digits + COLON + SPACE */
 void printToken(const Token* token) {
     const FileLine fl = token->origin;
     char temp[CASPIAN_MAX_TOKEN_HEADER_SZ] = "";
@@ -101,6 +109,7 @@ static bool isDelimiter(const char c) {
         case '*': case '~': case ':': case ';':
         case ',': case '.': case '?': case '|':
         case '+': case '-': case '/': case '=':
+        case '\\':
             return true;
         default: return false;
     }
@@ -157,9 +166,17 @@ uint tokenizeLine(const FileLine* fl, Token tokens[CASPIAN_MAX_TOKENS_IN_LINE]) 
     bool in_string = false, in_char = false;
 
     /* Lambda equivalents for pushing char and pushing a token */
-    #define appendChar(CHAR) buf[buf_index++]=CHAR
+    #define appendChar(CHAR) {\
+        if (buf_index == CASPIAN_MAX_TOKEN_SZ-1) {\
+            error_line(1, *fl, "Token is too long, maximum length is (%u).", CASPIAN_MAX_TOKEN_SZ);\
+        }\
+        buf[buf_index++]=CHAR;\
+    }
     #define appendToken(TOKEN, INDEX) {\
         if (buf_index > 0) {\
+            if (num_tokens == CASPIAN_MAX_TOKENS_IN_LINE-1) {\
+                error_line(1, *fl, "Too many tokens in line, maximum number of tokens is (%u).", CASPIAN_MAX_TOKENS_IN_LINE);\
+            }\
             TOKEN[buf_index] = 0;\
             tokens[num_tokens++] = newToken(INDEX - strlen(TOKEN) + 1, fl, TOKEN);\
         }\
