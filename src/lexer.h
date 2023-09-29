@@ -9,7 +9,11 @@
 #define CASPIAN_MAX_FILELINE_SZ   512
 #define CASPIAN_MAX_LINES_IN_FILE 1024
 
-#define CASPIAN_DISABLE_PREPROCESSOR true
+#ifndef DISABLE_PREPROCESSOR
+    #define CASPIAN_DISABLE_PREPROCESSOR true
+#else
+    #define CASPIAN_DISABLE_PREPROCESSOR false
+#endif
 
 typedef struct {
     uint line_number;

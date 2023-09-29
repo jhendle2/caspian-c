@@ -1,5 +1,5 @@
 CXX:=g++
-CXXFLAGS:=-ansi -Wall
+CXXFLAGS:=-ansi -Wall -DDISABLE_PREPROCESSOR
 
 SRC:=./src
 OBJ:=./obj
