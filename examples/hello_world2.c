@@ -6,5 +6,5 @@ int main(int argc, char** argv) {
     return 0;
 }
 
-// FIXME: Block comments probably still don't work
-// FIXME: Structs, enums, unions, typedef
+/* FIXME: Block comments probably still don't work
+   FIXME: Structs, enums, unions, typedef */

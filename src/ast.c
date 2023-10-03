@@ -136,9 +136,14 @@ void treeAstPtr(const AstPtr astp, const uint level) {
     }
 }
 
+#include <assert.h>
 void appendAstPtr(AstPtr astp, AstPtr next) {
     AstPtr last = astp;
-    while (last->next != NULL) {
+    while (
+        last->next != NULL &&
+        last->next != last /* FIXME: This resolves a weird bug where the loop continues forever but it's a hack! */
+    ) {
+        // printf("HERE(%s)\n", last->tokens[0].text);
         last = last->next;
     }
     last->next = next;
@@ -227,6 +232,7 @@ static AstPtr buildFirstPassTree(const char* file_path, const FileLine file_as_l
                     tokens_read_index = 0;\
                     num_tokens_read = tokenizeLine( &(file_as_lines[current_line_index++]), tokens_read );\
                 }\
+                if (num_tokens_read == 0) tokens_remaining = false; \
             }\
         }\
         if (tokens_remaining) current_token = tokens_read[tokens_read_index++];\
@@ -247,9 +253,23 @@ static AstPtr buildFirstPassTree(const char* file_path, const FileLine file_as_l
 
     first_pass_tree->node_type = Namespace;
 
+    // uint debug_depth = 0;
+
     AstPtr prev_astp = first_pass_tree;
     startTokenStream(current_token);
     do {
+
+        /* Once we see a block comment begin, keep going until we see its end */
+        if (cmpToken(&current_token, "/*")) {
+            while (tokens_remaining) {
+                nextToken();
+                if (cmpToken(&current_token, "*/")) break;
+            }
+            nextToken(); /* Same condition as end of do-while b/c we want to continue here */
+            continue;
+        }
+        // printf("@(%s)\n", current_token.text);
+
         enum AstNodeType node_type = determineNodeType(&current_token);
 
         /* Aggregate tokens which should be combined */
@@ -280,6 +300,7 @@ static AstPtr buildFirstPassTree(const char* file_path, const FileLine file_as_l
             cmpToken(&first, "{") ||
             cmpToken(&first, "[")
         ) {
+            // printf("[GOING DOWN %u]\n", ++debug_depth);
             current_astp = child_astp;
         }
 
@@ -288,7 +309,12 @@ static AstPtr buildFirstPassTree(const char* file_path, const FileLine file_as_l
             cmpToken(&first, "}") ||
             cmpToken(&first, "]")
         ) {
+            // printf("[GOING UP %u]\n", --debug_depth);
             current_astp = current_astp->parent;
+            if (current_astp == NULL) {
+                printf("[CRITICAL SCOPE ERROR!]\n");
+                exit(1); // TODO: Figure out when this happens and if it ever should occur for real (or if it's a compiler bug)
+            }
         }
 
         prev_astp = child_astp;
@@ -330,7 +356,13 @@ static AstPtr processAstNode(AstPtr* node_to_process) {
         ) {
             addChild(processed_node, copyAstPtr(next1(*node_to_process)));
             addChild(processed_node, copyAstPtr(next2(*node_to_process)));
-            addChild(processed_node, copyAstPtr(next3(*node_to_process)));
+
+            /* Arguments get dropped otherwise */
+            AstPtr arguments = next3(*node_to_process);
+            AstPtr arguments_copy = copyAstPtr(arguments);
+            swapChildren(arguments_copy, arguments);
+            addChild(processed_node, arguments_copy);
+            // addChild(processed_node, copyAstPtr(next3(*node_to_process)));
             
             if (cmpNext4(*node_to_process, BlockBegin)) { /* MODIFIER TYPE IDENTIFIER ( { */
                 addChild(processed_node, copyAstPtr(next4(*node_to_process)));
@@ -355,7 +387,12 @@ static AstPtr processAstNode(AstPtr* node_to_process) {
             if ( /* TYPE IDENTIFIER ( */
                 cmpNext2(*node_to_process, ParenExprBegin)
             ) {
-                addChild(processed_node, copyAstPtr(next2(*node_to_process)));
+                /* Arguments get dropped otherwise */
+                AstPtr arguments = next2(*node_to_process);
+                AstPtr arguments_copy = copyAstPtr(arguments);
+                swapChildren(arguments_copy, arguments);
+                addChild(processed_node, arguments_copy);
+                // addChild(processed_node, copyAstPtr(next2(*node_to_process)));
                 
                 if (cmpNext3(*node_to_process, BlockBegin)) { /* TYPE IDENTIFIER ( { */
                     addChild(processed_node, copyAstPtr(next3(*node_to_process)));
@@ -438,6 +475,7 @@ static void buildSecondPassTree(AstPtr current_astp, AstPtr node_to_process) {
     AstPtr old_parent_astp = current_astp;
 
     /* Determine the type of node using its neighbors to really hone it in */
+    // printf("Processing(%s)\n", node_to_process->tokens[0].text);
     AstPtr processed_node = processAstNode(&node_to_process);
     addChild(current_astp, processed_node);
 
@@ -445,13 +483,19 @@ static void buildSecondPassTree(AstPtr current_astp, AstPtr node_to_process) {
         `processAstNode` will SKIP neighbors who were used to hone in a previous node.
         Ex: `(` being used to prove `func` is a function header -> so we skip past `(` */
     AstPtr next = node_to_process->next;
-    if (next) buildSecondPassTree(current_astp, next);
+    if (next) {
+        // printf("NEXT(%s)...\n", next->tokens[0].text);
+        buildSecondPassTree(current_astp, next);
+    }
     current_astp = old_parent_astp;
 
     /* If I have any children, they haven't been processed yet, so process them here */
     current_astp = processed_node;
     AstPtr child = node_to_process->child;
-    if (child) buildSecondPassTree(current_astp, child);
+    if (child) {
+        // printf("CHILD(%s)...\n", child->tokens[0].text);
+        buildSecondPassTree(current_astp, child);
+    }
     current_astp = old_parent_astp;
 }
 
@@ -459,8 +503,12 @@ AstPtr buildAstTree(const char* file_path, const FileLine file_as_lines[CASPIAN_
     
     /* Create a hierarchical tree for the nodes in the AST linked-list */
     AstPtr first_pass_tree = buildFirstPassTree(file_path, file_as_lines, num_file_lines);
+    printf("\nFirstPass:\n");
     treeAstPtr(first_pass_tree, 0);
     printf("\n");
+
+    // delAstPtr(&first_pass_tree);
+    // return NULL;
 
     /* Setup for the 2nd hierarchical tree */
     generateMasterTokens(file_path, MASTER_TOKENS);
@@ -471,6 +519,7 @@ AstPtr buildAstTree(const char* file_path, const FileLine file_as_lines[CASPIAN_
     /* Copy the `first_pass_tree` but properly tag all nodes in the tree */
     AstPtr current_astp = master_astp;
     buildSecondPassTree(current_astp, first_pass_tree->child);
+    printf("\nSecondPass:\n");
     treeAstPtr(master_astp, 0);
     printf("\n");
 
