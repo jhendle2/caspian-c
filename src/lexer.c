@@ -47,7 +47,7 @@ uint readFileAsLines(const char* file_path, FileLine file_as_lines[CASPIAN_MAX_L
         // char* stripped = lstrip(buf);  /* Drop the leading spaces so we can print properly later */
         replace(stripped, '\n', '\0');    /* Drop the newline at the end of the fileline for printing */
         if (empty(stripped)) continue;    /* Ignore blank lines */
-        if (CASPIAN_DISABLE_PREPROCESSOR && isPreprocessorLine(stripped)) continue;
+        if (!CASPIAN_DISABLE_PREPROCESSOR && isPreprocessorLine(stripped)) continue;
 
         const FileLine read_line = newFileLine(line_number, file_path, stripped);
         // printFileLine(&read_line);
@@ -245,6 +245,12 @@ uint tokenizeLine(const FileLine* fl, Token tokens[CASPIAN_MAX_TOKENS_IN_LINE]) 
             continue;
 
         }
+
+        if (c == '.' && buf_index>0 && isDec(buf[buf_index-1])) {
+            appendChar (c);
+            continue;
+        }
+
         if (isDelimiter(c)) {
             appendToken(buf, i);
             appendChar (c);
@@ -267,11 +273,14 @@ uint tokenizeLine(const FileLine* fl, Token tokens[CASPIAN_MAX_TOKENS_IN_LINE]) 
 }
 
 #define BRIEF 25
-void printTokens(const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint len) {
+void printTokensNoNewline(const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint len) {
     uint i;
     for (i = 0; i<len && i<BRIEF; i++)
         printf("`%s` ", tokens[i].text);
     if (i>BRIEF) printf("... `%s`", tokens[len-1].text);
+}
+void printTokens(const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint len) {
+    printTokensNoNewline(tokens, len);
     printf("\n");
 }
 
@@ -325,4 +334,12 @@ uint pushBackTokens(Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], uint num_tokens, c
     }
     tokens[num_tokens-1] = (*push_token);
     return num_tokens;
+}
+
+bool isOperatorDelimiter(const Token* token) {
+    return (
+        (strlen(token->text)==1 && isDelimiter(token->text[0])) ||
+        (strlen(token->text)==2 && isOperator2(token->text[0], token->text[1])) ||
+        (strlen(token->text)==3 && isOperator3(token->text[0], token->text[1], token->text[2]))
+    ); 
 }

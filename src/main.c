@@ -2,9 +2,10 @@
 
 #include "lexer.h"
 #include "error.h"
-// #include "ast.h"
-#include "keywords.h"
+#include "ast.h"
+// #include "keywords.h"
 #include "parser.h"
+#include "types.h"
 
 ExitCode processFile(const char* file_path) {
 
@@ -13,25 +14,63 @@ ExitCode processFile(const char* file_path) {
     uint num_file_lines = readFileAsLines(file_path, file_as_lines);
 
     // for (uint i = 0; i<num_file_lines; i++) {
-    //     printFileLine(file_as_lines+i);
+    //     // printFileLine(file_as_lines+i);
     //     Token tokens[CASPIAN_MAX_TOKENS_IN_LINE];
     //     uint num_tokens = tokenizeLine(file_as_lines+i, tokens);
-    //     for (uint t = 0; t<num_tokens; t++) {
-    //         printToken(tokens+t);
-    //         printf(" -- "); printFileLine(tokens[t].origin);
-    //         printf("\n");
+    //     if (num_tokens) {
+    //         for (uint t = 0; t<num_tokens; t++) {
+    //             printToken(tokens+t);
+    //             // printf(" -- "); printFileLine(&(tokens[t].origin));
+    //             // printf("\n");
+    //         }
+    //         printf("\n\n");
     //     }
-    //     printf("\n\n");
     // }
+    // return EXIT_SUCCESS;
 
     // AstPtr master_astp = buildAstTree(file_path);
     // masterTreeAstPtr(master_astp);
-
     // delAstPtr(&master_astp);
 
-    SyntaxPtr master = buildSyntaxTree(file_path, file_as_lines, num_file_lines);
-    treeSyntaxPtr(master, 0);
-    delSyntaxPtr (&master);
+    // FileLine alias_line = newFileLine(0, "", "const int***");
+
+    // Token key_type = newToken(11, &file_as_lines[0], "i32");
+    // printf("key=%s\n", key_type.text);
+
+    // Token alias_tokens[CASPIAN_MAX_TOKENS_IN_LINE];
+    // uint alias_len = tokenizeLine(&alias_line, alias_tokens);
+    // addTypeAlias(&key_type, alias_tokens, alias_len);
+
+    // Token recall_tokens[CASPIAN_MAX_TOKENS_IN_TYPE_RECALL];
+    // uint recall_len = 0;
+    // TypeStatus recall_status = recallTypeAlias(&key_type, recall_tokens, &recall_len);
+
+    // printf("recall="); printTokens(recall_tokens, recall_len);
+
+    // FileLine line = newFileLine(0, "", "bob");
+    // Token tokens[CASPIAN_MAX_TOKENS_IN_LINE];
+    // tokenizeLine(&line, tokens);
+    // printf("%s is type? %s\n", tokens[0].text, isType(&(tokens[0]))?"YES":"NO");
+
+    // return EXIT_SUCCESS;
+
+    // printf("\n---- ---- ---- ----\n");
+
+    // SyntaxPtr master_sp = buildSyntaxTree(file_path, file_as_lines, num_file_lines);
+    // treeSyntaxPtr(master_sp, 0);
+
+    // printf("\n---- ---- ---- ----\n");
+
+    // AstPtr master_astp = buildAstTree(file_path, master_sp);
+    // treeAstPtr(master_astp, 0);
+
+    // printf("\n---- ---- ---- ----\n");
+
+    // delSyntaxPtr (&master_sp  );
+    // delAstPtr    (&master_astp);
+
+    AstPtr master = buildAstTree(file_path, file_as_lines, num_file_lines);
+    delAstPtr(&master);
 
     return EXIT_SUCCESS;
 }

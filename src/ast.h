@@ -1,65 +1,69 @@
-// #ifndef CASPIAN_AST_H
-// #define CASPIAN_AST_H
+#ifndef CASPIAN_AST_H
+#define CASPIAN_AST_H
 
-// #include "lexer.h"
-// #include "parser.h"
+#include "lexer.h"
 
-// #define CASPIAN_MAX_AST_CHILDREN 512
+#define CASPIAN_MAX_AST_CHILDREN 128
 
-// enum AstOp {
-//     AST_INVALID,
-//     AST_MASTER,
-//     AST_NAMESPACE,
+enum AstNodeType {
+    InvalidNode,
 
-//     AST_VAR_INIT,
+    Namespace,
+    TypeReference,
+    Identifier,
 
-//     AST_FOR_LOOP,
-//     AST_WHILE_LOOP,
+    StatementEnd,
+    ParenExprBegin,
+    ListContinue,
+    ParenExprEnd,
+    BlockBegin,
+    BlockEnd,
+    IndexBegin,
+    IndexEnd,
 
-//     AST_CONTINUE,
-//     AST_BREAK,
-//     AST_GOTO,
+    FunctionModifier, /* static, inline */
+    TypeModifier,     /* const */
 
-//     AST_IF,
-//     AST_ELSE,
+    StructDecl,
+    UnionDecl,
+    EnumDecl,
+    AliasDecl,
 
-//     AST_STRUCT,
-//     AST_ENUM,
-//     AST_UNION,
+    IntegerConst,
+    FloatConst,
+    CharacterConst,
+    StringConst,
+
+    ReturnStatement,
+
+    FunctionDeclaration,
+    Function,
+    FunctionCall,
+
+    Operator,
+    AssignmentOperator,
     
-//     AST_TYPE_ALIAS,
+    VariableDeclaration,
+    VariableAssignment,
+    Expression,
+};
 
-//     AST_FUNCTION_HEADER,
-//     AST_FUNCTION_CALL,
-//     AST_RETURN,
+typedef struct AstNode {
+    AstNodeType     node_type;
+    uint            num_tokens;
+    Token           tokens[CASPIAN_MAX_TOKENS_IN_LINE];
+    struct AstNode *parent, *child, *prev, *next;
+} *AstPtr;
 
-//     AST_INTEGER_CONSTANT,
-//     AST_STRING_CONSTANT,
+AstPtr newAstPtr  (const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens);
+void   delAstPtr  (AstPtr* astp);
+void   printAstPtr(const AstPtr astp);
+// void   dumpAstPtr(const AstPtr astp);
+void   appendAstPtr(AstPtr astp, AstPtr next);
+void   treeAstPtr (const AstPtr astp, const uint level);
 
-//     AST_CAST,
-// NUM_AST_OPS
-// };
+/***************************************************************************************/
 
-// typedef struct ast_node_s {
-//     AstOp op;
+AstPtr buildAstTree(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines);
 
-//     bool has_identifier;
-//     Token identifier;
-
-//     uint num_tokens, num_children;
-//     Token tokens[CASPIAN_MAX_TOKENS_IN_LINE];
-
-//     struct ast_node_s* parent;
-//     struct ast_node_s* children[CASPIAN_MAX_AST_CHILDREN];
-// } *AstPtr;
-
-// AstPtr newAstPtr  (const enum AstOp op, const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens);
-// void   delAstPtr  (AstPtr* astp);
-// void   printAstPtr(const AstPtr astp);
-// void   treeAstPtr (const AstPtr astp, const uint level);
-// void   assignIdentifier(AstPtr astp, const Token identifier);
-// #define masterTreeAstPtr(MASTER) treeAstPtr(MASTER, 0)
-
-// AstPtr buildAstTree(const char* file_path);
-
-// #endif /* CASPIAN_PARSER_H */
+#endif /* CASPIAN_AST_H */

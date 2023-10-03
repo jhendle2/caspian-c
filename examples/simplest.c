@@ -1,6 +1,13 @@
 // This is one of the simplest C programs possible
+
+#include <stdio.h>
+
+int func() {
+    return 9;
+}
+
 int main() {
-    int x = 5;
+    int x = func();
     
     if (x > 5) {
         printf("x is greater than five\n");

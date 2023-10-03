@@ -62,10 +62,11 @@ void treeSyntaxPtr (const SyntaxPtr sp, const uint level) {
     }
 }
 
-static SyntaxPtr newMaster(const char* file_path) {
+SyntaxPtr newMasterSyntaxPtr(const char* file_path) {
     generateMasterTokens(file_path, MASTER_TOKENS);
     return newSyntaxPtr(MASTER_TOKENS, 1);
 }
+
 static void addChild(SyntaxPtr parent, SyntaxPtr child) {
     if (parent->num_children >= (CASPIAN_MAX_SYNTAX_CHILDREN-1)) {
         warning_line(child->tokens[0].origin, "Too many lines in this scope! Line will be ignored...");
@@ -146,7 +147,7 @@ static bool isMatchingScopeToken(const Token* opener, const Token* closer) {
 }
 
 SyntaxPtr buildSyntaxTree(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines) {
-    SyntaxPtr master     = newMaster(file_path);
+    SyntaxPtr master     = newMasterSyntaxPtr(file_path);
     SyntaxPtr current    = master;
     gCurrentSyntaxMaster = master;
 

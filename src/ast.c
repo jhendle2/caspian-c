@@ -1,184 +1,483 @@
-// #include "ast.h"
+#include "ast.h"
 
-// #include <stdio.h>
-// #include <stdlib.h>
-// #include <string.h>
+#include <stdio.h>
+#include <stdlib.h>
 
-// #include "error.h"
-// #include "ast_helpers.h"
-// #include "keywords.h"
+#include "error.h"
+#include "types.h"
+#include "constants.h"
 
-// static const char* strAstOp[NUM_AST_OPS] = {
-//     "INVALID",
-//     "MASTER",
-//     "NAMESPACE",
+static const char* strAstNodeType[] = {
+    "InvalidNode",
 
-//     "VAR_INIT",
+    "Namespace",
+    "TypeReference",
+    "Identifier",
 
-//     "FOR_LOOP",
-//     "WHILE_LOOP",
+    "StatementEnd",
+    "ParenExprBegin",
+    "ListContinue",
+    "ParenExprEnd",
+    "BlockBegin",
+    "BlockEnd",
+    "IndexBegin",
+    "IndexEnd",
+
+    "FunctionModifier",
+    "TypeModifier",
+
+    "StructDecl",
+    "UnionDecl",
+    "EnumDecl",
+    "AliasDecl",
+    
+    "IntegerConst",
+    "FloatConst",
+    "CharacterConst",
+    "StringConst",
+
+    "ReturnStatement",
+
+    "FunctionDeclaration",
+    "Function",
+    "FunctionCall",
+
+    "Operator",
+    "AssignmentOperator",
+
+    "VariableDeclaration",
+    "VariableAssignment",
+    "Expression",
+};
+
+AstPtr gCurrentAstMaster = NULL;
+uint gTotalAstNodes, gTotalAstFrees;
+
+AstPtr newAstPtr(const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens) {
+    AstPtr astp = (AstPtr)malloc(sizeof(struct AstNode));
+    if (astp == NULL) error_token(1, tokens[0], "System ran out of memory and no new AST nodes could be allocated");
+
+    gTotalAstNodes++;
+
+    astp->node_type = InvalidNode;
+
+    astp->num_tokens = num_tokens;
+    copyTokens(astp->tokens, tokens, num_tokens);
+
+    astp->parent = NULL;
+    astp->child  = NULL;
+    astp->prev   = NULL;
+    astp->next   = NULL;
+
+    return astp;
+}
+void delAstPtr(AstPtr* astp) {
+    if (!astp || !*astp) return;
+
+    (*astp)->parent = NULL;
+    (*astp)->prev   = NULL;
+
+    AstPtr child = (*astp)->child;
+    if (child) delAstPtr(&child);
+    (*astp)->child = NULL;
+
+    AstPtr next = (*astp)->next;
+    if (next) delAstPtr(&next);
+    (*astp)->next = NULL;
+
+    free(*astp);
+    gTotalAstFrees++;
+    *astp = NULL;
+}
+
+void printAstPtr(const AstPtr astp) {
+    if (astp==NULL) printf("(null) ");
+    
+    if (astp->num_tokens > 0) {
+        printf("{%-15s: ", strAstNodeType[astp->node_type]);
+        printTokensNoNewline(astp->tokens, astp->num_tokens);
+        printf("}\n");
+    } else {
+        printf("[[ %-15s ]]\n", strAstNodeType[astp->node_type]);
+    }
+}
+
+// void dumpAstPtr(const AstPtr astp) {
+//     printf("\n(AstPtr):\n");
+//     // printf("Type: %s\n", strAstOp[astp->op]);
+//     printf("Parent: ");
+//         if (astp->parent) printTokens(astp->parent->tokens, astp->parent->num_tokens);
+//         else            printf("(null)\n");
+//     printf("Tokens: ");
+//         printTokens(astp->tokens, astp->num_tokens);
+//     // printf("Children (%u): ", astp->num_children);
+//     // if (astp->num_children) {
+//     //     for (uint i = 0; i<astp->num_children; i++) {
+//     //         printf("(%u) ", i); printTokens(astp->children[i]->tokens, astp->children[i]->num_tokens);
+//     //     }
+//     // } else printf("(none)\n");
+//     printf("(EndAstpPtr)\n");
+// }
+
+void listAstPtr(const AstPtr head) {
+    printf("- "); printAstPtr(head);
+    if (head->next) listAstPtr(head->next);
+}
+
+void treeAstPtr(const AstPtr astp, const uint level) {
+    for (uint i = 0; i<level+1; i++) printf("- ");
+    printAstPtr(astp);
+    if (astp->child) {
+        AstPtr child = astp->child;
+        while (child) {
+            treeAstPtr(child, level+1);
+            child = child->next;
+        }
+    }
+}
+
+void appendAstPtr(AstPtr astp, AstPtr next) {
+    AstPtr last = astp;
+    while (last->next != NULL) {
+        last = last->next;
+    }
+    last->next = next;
+    next->prev = last;
+}
+
+static void addChild(AstPtr parent, AstPtr child) {
+    child->parent = parent;
+
+    if (parent->child == NULL) {
+        parent->child = child;
+    }
+    else {
+        appendAstPtr(parent->child, child);
+    }
+}
+
+/***************************************************************************************/
+
+static AstNodeType determineNodeType(const Token* token) {
+    if (isType        (token))      return TypeReference;
+    if (isIntegerConst(token))      return IntegerConst;
+    if (isCharConst   (token))      return CharacterConst;
+    if (isStringConst (token))      return StringConst;
+    if (isFloatConst  (token))      return FloatConst;
+
+    if (cmpToken(token, ";"))       return StatementEnd;
+    if (cmpToken(token, "("))       return ParenExprBegin;
+    if (cmpToken(token, ","))       return ListContinue;
+    if (cmpToken(token, ")"))       return ParenExprEnd;
+    if (cmpToken(token, "["))       return IndexBegin;
+    if (cmpToken(token, "]"))       return IndexEnd;
+    if (cmpToken(token, "{"))       return BlockBegin;
+    if (cmpToken(token, "}"))       return BlockEnd;
+    if (cmpToken(token, "="))       return AssignmentOperator;
+    if (isOperatorDelimiter(token)) return Operator;
+
+    if (cmpToken(token, "static"))  return FunctionModifier;
+    if (cmpToken(token, "inline"))  return FunctionModifier;
+    if (cmpToken(token, "const"))   return TypeModifier;
+    if (cmpToken(token, "return"))  return ReturnStatement;
+    if (cmpToken(token, "struct"))  return StructDecl;
+    if (cmpToken(token, "enum"))    return EnumDecl;
+    if (cmpToken(token, "union"))   return UnionDecl;
+    if (cmpToken(token, "typedef")) return AliasDecl;
+
+    return Identifier;
+}
+
+static AstPtr copyAstPtr(const AstPtr original) {
+    /*
+        Does not copy relationships between this node and other nodes
+        because WILL lead to double frees later.
+    */
+    AstPtr new_astp = newAstPtr(original->tokens, original->num_tokens);
+    new_astp->node_type = original->node_type;
+    return new_astp;
+}
+
+static void swapChildren(AstPtr left, AstPtr right) {
+    /*
+        If you absolutely need to transfer children between two nodes,
+        you must swap them, not copy them. Otherwise, double frees will occur.
+    */
+    left->child  = right->child;
+    right->child = NULL;
+}
+
+static AstPtr buildFirstPassTree(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines) {
+    /***************************************************************************************/
+    /* This allows us to read tokens as if they were coming one by one from a stream */
+    uint current_line_index = 0;
+    Token current_token;
+    Token tokens_read[CASPIAN_MAX_TOKENS_IN_LINE];
+    uint num_tokens_read = 0;
+    uint tokens_read_index = 0;
+    bool tokens_remaining = true;
+
+    #define nextToken(TOKEN) {\
+        if (tokens_read_index == num_tokens_read) { /* Load up a new batch of tokens */ \
+            if (current_line_index == num_file_lines) {\
+                tokens_remaining = false;\
+            } else {\
+                num_tokens_read = 0;\
+                while (num_tokens_read == 0 && current_line_index < num_file_lines) { /* Must check if more lines left */ \
+                    tokens_read_index = 0;\
+                    num_tokens_read = tokenizeLine( &(file_as_lines[current_line_index++]), tokens_read );\
+                }\
+            }\
+        }\
+        if (tokens_remaining) current_token = tokens_read[tokens_read_index++];\
+    }
+    #define startTokenStream(TOKEN) {\
+        current_line_index = 0;\
+        tokens_remaining   = true;\
+        nextToken(TOKEN);\
+    }
+    
+    /***************************************************************************************/
+
+    /* Create a linked-list of AST nodes for each token in the file */
+    generateMasterTokens(file_path, MASTER_TOKENS);
+    AstPtr first_pass_tree  = newAstPtr(MASTER_TOKENS, 1);
+    AstPtr current_astp = first_pass_tree;
+    gCurrentAstMaster      = first_pass_tree;
+
+    first_pass_tree->node_type = Namespace;
+
+    AstPtr prev_astp = first_pass_tree;
+    startTokenStream(current_token);
+    do {
+        enum AstNodeType node_type = determineNodeType(&current_token);
+
+        /* Aggregate tokens which should be combined */
+        if (cmpToken(&current_token, "*") && prev_astp->node_type == TypeReference) {
+            prev_astp->num_tokens = pushBackTokens(prev_astp->tokens, prev_astp->num_tokens, &current_token);
+            nextToken();
+            continue;
+        }
+        if (node_type == FunctionModifier && prev_astp->node_type == FunctionModifier) {
+            prev_astp->num_tokens = pushBackTokens(prev_astp->tokens, prev_astp->num_tokens, &current_token);
+            nextToken();
+            continue;
+        }
+        if (node_type == TypeReference && prev_astp->node_type == TypeModifier) {
+            prev_astp->num_tokens = pushBackTokens(prev_astp->tokens, prev_astp->num_tokens, &current_token);
+            prev_astp->node_type  = TypeReference;
+            nextToken();
+            continue;
+        }
+
+        AstPtr child_astp = newAstPtr(&current_token, 1);
+        child_astp->node_type = node_type;
+        addChild(current_astp, child_astp);
+
+        const Token first = child_astp->tokens[0];
+        if (
+            cmpToken(&first, "(") ||
+            cmpToken(&first, "{") ||
+            cmpToken(&first, "[")
+        ) {
+            current_astp = child_astp;
+        }
+
+        if (
+            cmpToken(&first, ")") ||
+            cmpToken(&first, "}") ||
+            cmpToken(&first, "]")
+        ) {
+            current_astp = current_astp->parent;
+        }
+
+        prev_astp = child_astp;
+        nextToken(current_token);
+    } while (tokens_remaining);
+
+    return first_pass_tree;
+}
+
+#define next1(NODE) (NODE)->next
+#define next2(NODE) (NODE)->next->next
+#define next3(NODE) (NODE)->next->next->next
+#define next4(NODE) (NODE)->next->next->next->next
+
+#define cmpNext1(NODE, CASE) ( next1(NODE) && next1(NODE)->node_type == CASE )
+#define cmpNext2(NODE, CASE) ( next2(NODE) && next2(NODE)->node_type == CASE )
+#define cmpNext3(NODE, CASE) ( next3(NODE) && next3(NODE)->node_type == CASE )
+#define cmpNext4(NODE, CASE) ( next4(NODE) && next4(NODE)->node_type == CASE )
+
+static AstPtr processAstNode(AstPtr* node_to_process) {
+    /*
+        Determines syntax of a stream of tokens.
+        May need additional tokens to the right of a given token.
+        If these additional tokens are consumed, the stream is shifted
+        past those tokens so they are not double counted.
+    */
+
+    AstPtr processed_node = newAstPtr((Token*){}, 0);
+    AstPtr copy_node = copyAstPtr(*node_to_process);
+
+    const enum AstNodeType node_type = (*node_to_process)->node_type;
+
+    if (node_type ==  FunctionModifier) { /* static, inline ... */
+        addChild(processed_node, copy_node);
+        if ( /* MODIFIER TYPE IDENTIFIER ( */
+            cmpNext1(*node_to_process, TypeReference ) &&
+            cmpNext2(*node_to_process, Identifier    ) &&
+            cmpNext3(*node_to_process, ParenExprBegin)
+        ) {
+            addChild(processed_node, copyAstPtr(next1(*node_to_process)));
+            addChild(processed_node, copyAstPtr(next2(*node_to_process)));
+            addChild(processed_node, copyAstPtr(next3(*node_to_process)));
+            
+            if (cmpNext4(*node_to_process, BlockBegin)) { /* MODIFIER TYPE IDENTIFIER ( { */
+                addChild(processed_node, copyAstPtr(next4(*node_to_process)));
+                processed_node->node_type = Function;
+                (*node_to_process) = next4(*node_to_process);
+            }
+            else if (cmpNext4(*node_to_process, StatementEnd)) { /* MODIFIER TYPE IDENTIFIER ( ; */
+                addChild(processed_node, copyAstPtr(next4(*node_to_process)));
+                processed_node->node_type = FunctionDeclaration;
+                (*node_to_process) = next4(*node_to_process);
+            }
+        }
+    }
         
-//     "CONTINUE",
-//     "BREAK",
-//     "GOTO",
+    if (node_type == TypeReference) { /* TYPE */
+        if ( /* TYPE IDENTIFIER */
+            cmpNext1(*node_to_process, Identifier )
+        ) {
+            addChild(processed_node, copy_node);
+            addChild(processed_node, copyAstPtr(next1(*node_to_process)));
 
-//     "IF",
-//     "ELSE",
+            if ( /* TYPE IDENTIFIER ( */
+                cmpNext2(*node_to_process, ParenExprBegin)
+            ) {
+                addChild(processed_node, copyAstPtr(next2(*node_to_process)));
+                
+                if (cmpNext3(*node_to_process, BlockBegin)) { /* TYPE IDENTIFIER ( { */
+                    addChild(processed_node, copyAstPtr(next3(*node_to_process)));
+                    processed_node->node_type = Function;
+                    (*node_to_process) = next3(*node_to_process);
+                }
+                else if (cmpNext3(*node_to_process, StatementEnd)) { /* TYPE IDENTIFIER ( ; */
+                    addChild(processed_node, copyAstPtr(next3(*node_to_process)));
+                    processed_node->node_type = FunctionDeclaration;
+                    (*node_to_process) = next3(*node_to_process);
+                }
+            }
 
-//     "STRUCT",
-//     "ENUM",
-//     "UNION",
+            else if ( /* TYPE IDENTIFIER ; */
+                cmpNext2(*node_to_process, StatementEnd)
+            ) {
+                addChild(processed_node, copyAstPtr(next2(*node_to_process)));
+                processed_node->node_type = VariableDeclaration;
+                (*node_to_process) = next2(*node_to_process);
+            }
 
-//     "TYPE_ALIAS",
+            else if ( /* TYPE IDENTIFIER = ... ; */
+                cmpNext2(*node_to_process, AssignmentOperator)
+            ) {
+                AstPtr assignment_contents = next2(*node_to_process);
+                do { /* Loop until we find a semicolon */
+                    /* `copyAstPtr` doesn't include children and we need children of `[`, `(`, and `{` */
+                    AstPtr assignment_contents_with_children = copyAstPtr(assignment_contents);
+                    swapChildren(assignment_contents_with_children, assignment_contents);
+                    addChild(processed_node, assignment_contents_with_children);
+                    assignment_contents = assignment_contents->next;
+                } while (
+                    assignment_contents != NULL &&
+                    assignment_contents->node_type != StatementEnd
+                );
+                addChild(processed_node, copyAstPtr(assignment_contents));
+                processed_node->node_type = VariableAssignment;
+                (*node_to_process) = assignment_contents;
+            }
+        }
+    }
 
-//     "FUNCTION_HEADER",
-//     "FUNCTION_CALL",
-//     "RETURN",
+    if (node_type == Identifier) { /* IDENTIFIER */
+        addChild(processed_node, copy_node);
+        if (
+            cmpNext1(*node_to_process, ParenExprBegin) /* IDENTIFIER ( */
+        ) {
+            addChild(processed_node, copyAstPtr(next1(*node_to_process)));
+            processed_node->node_type = FunctionCall;
+            (*node_to_process) = next1(*node_to_process);
+        }
 
-//     "INTEGER_CONSTANT",
-//     "STRING_CONSTANT",
+        else if ( /* IDENTIFIER = ... ; */
+            cmpNext1(*node_to_process, AssignmentOperator) ||
+            cmpNext1(*node_to_process, Operator)
+        ) {
+            AstPtr assignment_contents = next1(*node_to_process);
+            do { /* Loop until we find a semicolon */
+                /* `copyAstPtr` doesn't include children and we need children of `[`, `(`, and `{` */
+                AstPtr assignment_contents_with_children = copyAstPtr(assignment_contents);
+                swapChildren(assignment_contents_with_children, assignment_contents);
+                addChild(processed_node, assignment_contents_with_children);
+                assignment_contents = assignment_contents->next;
+            } while (
+                assignment_contents != NULL &&
+                assignment_contents->node_type != StatementEnd
+            );
+            processed_node->node_type = Expression;
+            (*node_to_process) = assignment_contents;
+        }
+    }
 
-//     "CAST",
-// };
+    /* Clean-up and return */
+    if (processed_node->node_type != InvalidNode) return processed_node;
+    delAstPtr(&processed_node);
+    return copy_node;
+}
 
-// uint gTotalAstNodes = 0;
-// AstPtr newAstPtr  (const enum AstOp op, const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens) {
-//     AstPtr astp = (AstPtr)malloc(sizeof(struct ast_node_s));
-//     gTotalAstNodes++;
+static void buildSecondPassTree(AstPtr current_astp, AstPtr node_to_process) {
+    AstPtr old_parent_astp = current_astp;
+
+    /* Determine the type of node using its neighbors to really hone it in */
+    AstPtr processed_node = processAstNode(&node_to_process);
+    addChild(current_astp, processed_node);
+
+    /* If I have any neighbors who weren't processed, process them here.
+        `processAstNode` will SKIP neighbors who were used to hone in a previous node.
+        Ex: `(` being used to prove `func` is a function header -> so we skip past `(` */
+    AstPtr next = node_to_process->next;
+    if (next) buildSecondPassTree(current_astp, next);
+    current_astp = old_parent_astp;
+
+    /* If I have any children, they haven't been processed yet, so process them here */
+    current_astp = processed_node;
+    AstPtr child = node_to_process->child;
+    if (child) buildSecondPassTree(current_astp, child);
+    current_astp = old_parent_astp;
+}
+
+AstPtr buildAstTree(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines) {
     
-//     astp->has_identifier = false;
+    /* Create a hierarchical tree for the nodes in the AST linked-list */
+    AstPtr first_pass_tree = buildFirstPassTree(file_path, file_as_lines, num_file_lines);
+    treeAstPtr(first_pass_tree, 0);
+    printf("\n");
 
-//     astp->op = op;
-//     astp->parent = NULL;
-    
-//     astp->num_children = 0;
-//     for (uint i = 0; i<CASPIAN_MAX_AST_CHILDREN; i++)
-//         astp->children[i] = NULL;
+    /* Setup for the 2nd hierarchical tree */
+    generateMasterTokens(file_path, MASTER_TOKENS);
+    AstPtr master_astp     = newAstPtr(MASTER_TOKENS, 1);
+    master_astp->node_type = Namespace;
+    gCurrentAstMaster      = master_astp;
 
-//     astp->num_tokens = num_tokens;
-//     copyTokens(astp->tokens, tokens, num_tokens);
+    /* Copy the `first_pass_tree` but properly tag all nodes in the tree */
+    AstPtr current_astp = master_astp;
+    buildSecondPassTree(current_astp, first_pass_tree->child);
+    treeAstPtr(master_astp, 0);
+    printf("\n");
 
-//     return astp;
-// }
+    /* Clean-up */
+    delAstPtr(&first_pass_tree); /* No longer used */
+    delAstPtr(&master_astp); // TODO: Remove, only for testing
+    master_astp = NULL;
 
-// static AstPtr newMaster(const char* file_path) {
-//     generateMasterTokens(file_path, MASTER_TOKENS);
-//     return newAstPtr(AST_MASTER, MASTER_TOKENS, 1);
-// }
-
-// uint gTotalAstFrees = 0;
-// void delAstPtr(AstPtr* astp) {
-//     if (*astp == NULL) return; // TODO: Realistically, this should never happen so it can probably be removed
-
-//     (*astp)->parent = NULL;
-//     for (uint i = 0; i<(*astp)->num_children; i++)
-//         delAstPtr( &((*astp)->children[i]) );
-
-//     free(*astp); gTotalAstFrees++;
-//     *astp = NULL;
-// }
-
-// void assignIdentifier(AstPtr astp, const Token identifier) {
-//     astp->identifier     = identifier;
-//     astp->has_identifier = true;
-// }
-
-// void printAstPtr(const AstPtr astp) {
-//     // printf("(AstPtr):\n");
-//     // printf("tokens        = "); printTokens(astp->tokens, astp->num_tokens);
-
-//     // printf("parent        = ");
-//     //     if (astp->parent) printTokens(astp->parent->tokens, astp->parent->num_tokens);
-//     //     else printf("(none)\n");
-
-//     // printf("children(%3u) = ", astp->num_children);
-//     // if (astp->num_children==0) printf("(none)\n");
-//     // else                     printf("\n");
-//     // for (uint i = 0; i<astp->num_children; i++) {
-//     //     printf(" * "); printTokens(astp->children[i]->tokens, astp->children[i]->num_tokens);
-//     // }
-
-//     // printf("\n");
-// }
-
-// void treeAstPtr (const AstPtr astp, const uint level) {
-//     for (uint i = 0; i<level; i++) printf("* ");
-//     if (astp->num_children>0) printf("(%u) ", astp->num_children);
-//     if (astp->has_identifier) printf("AST(%s) [%s]: ", strAstOp[astp->op], astp->identifier.text);
-//     else printf("AST(%s): ", strAstOp[astp->op]);
-//     printTokens(astp->tokens, astp->num_tokens);
-
-//     for (uint c = 0; c<astp->num_children; c++)
-//         treeAstPtr(astp->children[c], level+1);
-// }
-
-// static void addChild(AstPtr parent, AstPtr child) {
-//     child->parent = parent;
-//     parent->children[parent->num_children] = child;
-//     parent->num_children++;
-// }
-
-// /****************************************************************************************************/
-// /* AST Building *************************************************************************************/
-
-// AstPtr gCurrentAstMaster = NULL;
-
-// AstPtr buildAstTreeHelper(AstPtr prev_astp, const SyntaxPtr current_sp) {
-//     /* Aliases for ease */
-//     // printf(" -- "); printTokens(current_sp->tokens, current_sp->num_tokens);
-//     // printf("is Typedef? %s\n", cmpToken(current_sp->tokens+0,"typedef")?"YES":"NO");
-//     const Token first = frontToken(current_sp->tokens);
-//     AstPtr child_astp = newAstPtr(AST_INVALID, current_sp->tokens, current_sp->num_tokens);
-
-//     if (cmpToken(&first, MASTER_TOKEN_STR)) {
-//         // printf("[1]\n");
-//         child_astp->op = AST_MASTER;
-//         return child_astp;
-//     }
-
-//     if (AST_VERIFY_FunctionHeader(prev_astp, child_astp, current_sp)) {
-//         // printf("[2]\n");
-//         child_astp->op = AST_FUNCTION_HEADER;
-//         return child_astp;
-//     }
-
-//     if (AST_VERIFY_Typedef(prev_astp, child_astp, current_sp)) {
-//         // printf("[3]\n");
-//         Token alias;
-//         child_astp->op = AST_TYPE_ALIAS;
-//         bool found = isolateTypeAlias(current_sp, &alias);
-//         if (found) addTypeAlias(&alias, current_sp->tokens, current_sp->num_tokens);
-//     }
-
-//     return child_astp;
-// }
-
-// AstPtr buildAstTreeRecursor(AstPtr current_astp, const SyntaxPtr current_sp) {
-//     AstPtr child_astp = buildAstTreeHelper(current_astp, current_sp);
-//     addChild(current_astp, child_astp);
-//     // AstPtr prev_astp = current_astp;
-//     current_astp = child_astp;
-
-//     for (uint i = 0; i<current_sp->num_children; i++) {
-//         const SyntaxPtr child = current_sp->children[i];
-//         buildAstTreeRecursor(current_astp, child);
-//     }
-
-//     // current_astp = prev_astp;
-//     return current_astp;
-// }
-
-// AstPtr buildAstTree(const char* file_path) {
-//     SyntaxPtr master_sp = buildSyntaxTree(file_path);
-//     masterTreeSyntaxPtr(master_sp); printf("\n"); // TODO: Remove
-
-//     AstPtr master_astp  = newMaster(file_path);
-//     AstPtr current_astp = master_astp;
-//     gCurrentAstMaster   = master_astp;
-
-//     buildAstTreeRecursor(current_astp, master_sp);
-//     masterTreeAstPtr(current_astp); printf("\n"); // TODO: Remove
-    
-//     delSyntaxPtr(&master_sp);
-//     return master_astp;
-// }
+    return master_astp;
+}
