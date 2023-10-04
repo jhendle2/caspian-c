@@ -67,6 +67,10 @@ int  findToken      (Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_to
     const FileLine MASTER_LINE  = newFileLine(0,  FILE_PATH  , MASTER_TOKEN_STR);\
     const Token    MASTER_TOKEN = newToken   (0, &MASTER_LINE, MASTER_TOKEN_STR);\
     const Token    NAME[CASPIAN_MAX_TOKENS_IN_LINE] = {MASTER_TOKEN};
+#define generateMasterToken(FILE_PATH, NAME) \
+    const FileLine MASTER_LINE  = newFileLine(0,  FILE_PATH  , FILE_PATH);\
+    const Token    MASTER_TOKEN = newToken   (0, &MASTER_LINE, FILE_PATH);\
+    const Token    NAME[CASPIAN_MAX_TOKENS_IN_LINE] = {MASTER_TOKEN};
 
 bool isOperatorDelimiter(const Token* token);
 

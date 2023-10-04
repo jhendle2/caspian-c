@@ -48,22 +48,34 @@ enum AstNodeType {
     Expression,
 };
 
-typedef struct AstNode {
-    AstNodeType     node_type;
-    uint            num_tokens;
-    Token           tokens[CASPIAN_MAX_TOKENS_IN_LINE];
-    struct AstNode *parent, *child, *prev, *next;
-} *AstPtr;
+typedef struct token_list_s {
+    Token token;
+    struct token_list_s *prev, *next;
+} *TokenList;
 
-AstPtr newAstPtr  (const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens);
-void   delAstPtr  (AstPtr* astp);
-void   printAstPtr(const AstPtr astp);
-// void   dumpAstPtr(const AstPtr astp);
-void   appendAstPtr(AstPtr astp, AstPtr next);
-void   treeAstPtr (const AstPtr astp, const uint level);
+TokenList newTokenList   (const Token* token);
+void    pushBackTokenList(TokenList head, TokenList item);
+void    delTokenList     (TokenList* head);
+void    printTokenList   (TokenList head);
+
+TokenList buildTokenListFromLines(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines);
 
 /***************************************************************************************/
 
-AstPtr buildAstTree(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines);
+// typedef struct AstNode {
+//     AstNodeType     node_type;
+//     uint            num_tokens;
+//     Token           tokens[CASPIAN_MAX_TOKENS_IN_LINE];
+//     struct AstNode *parent, *child;
+// } *AstPtr;
+
+// AstPtr newAstPtr  (const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint num_tokens);
+// void   delAstPtr  (AstPtr* astp);
+// void   printAstPtr(const AstPtr astp);
+// void   treeAstPtr (const AstPtr astp, const uint level);
+
+// /***************************************************************************************/
+
+// AstPtr buildAstTree(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines);
 
 #endif /* CASPIAN_AST_H */

@@ -4,7 +4,7 @@
 #include "error.h"
 #include "ast.h"
 // #include "keywords.h"
-#include "parser.h"
+// #include "parser.h"
 #include "types.h"
 
 ExitCode processFile(const char* file_path) {
@@ -69,8 +69,12 @@ ExitCode processFile(const char* file_path) {
     // delSyntaxPtr (&master_sp  );
     // delAstPtr    (&master_astp);
 
-    AstPtr master = buildAstTree(file_path, file_as_lines, num_file_lines);
-    delAstPtr(&master);
+    // AstPtr master = buildAstTree(file_path, file_as_lines, num_file_lines);
+    // delAstPtr(&master);
+
+    TokenList file_as_tokens = buildTokenListFromLines(file_path, file_as_lines, num_file_lines);
+    printTokenList( file_as_tokens); printf("\n");
+    delTokenList  (&file_as_tokens);
 
     return EXIT_SUCCESS;
 }
