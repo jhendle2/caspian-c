@@ -1,10 +1,24 @@
 #include "error.h"
 
 // #include "parser.h"
-// #include "ast.h"
+#include "ast.h"
 
 void safeExit(const ExitCode exit_code) {
     printf("[[[PREMATURE EXIT!]]]\n");
+
+    /********************************************************************/
+    extern TokenList
+            gTokenListMaster    ,
+            gTokenListStream    ,
+            gTokenListScopeStack,
+            gTokenListLastPopped;
+        
+    delTokenList(&gTokenListMaster);
+    delTokenList(&gTokenListStream);
+    delTokenList(&gTokenListScopeStack);
+    delTokenList(&gTokenListLastPopped);
+    printf("Succesfully cleaned-up all dangling token-lists\n");
+
 
     /********************************************************************/
     // extern SyntaxPtr gCurrentSyntaxMaster;

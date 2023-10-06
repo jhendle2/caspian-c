@@ -73,7 +73,10 @@ ExitCode processFile(const char* file_path) {
     // delAstPtr(&master);
 
     TokenList file_as_tokens = buildTokenListFromLines(file_path, file_as_lines, num_file_lines);
-    printTokenList( file_as_tokens); printf("\n");
+    // printTokenList( file_as_tokens); printf("\n");
+
+    AstPtr master_node = buildAstTree(file_as_tokens);
+
     delTokenList  (&file_as_tokens);
 
     return EXIT_SUCCESS;

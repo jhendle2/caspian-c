@@ -40,6 +40,8 @@ Token newToken      (const uint offset, const FileLine* origin, const char* text
 void  printToken    (const Token* token);
 bool  cmpToken      (const Token* token, const char* str);
 bool  cmpTokens     (const Token* token, const Token* other);
+#define tokenMatch    true
+#define tokenMismatch false
 uint  tokenizeLine  (const FileLine* fl, Token tokens[CASPIAN_MAX_TOKENS_IN_LINE]);
 
 void  printTokensNoNewline(const Token tokens[CASPIAN_MAX_TOKENS_IN_LINE], const uint len);

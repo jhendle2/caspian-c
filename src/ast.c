@@ -3,6 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "error.h"
+
 TokenList newTokenList(const Token* token) {
     TokenList alist = (TokenList)malloc(sizeof(struct token_list_s));
     alist->token    = *token;
@@ -14,6 +16,14 @@ void pushBackTokenList(TokenList head, TokenList item) {
         head->next = item;
         item->prev = head;
     } else pushBackTokenList(head->next, item);
+}
+TokenList popBackTokenList(TokenList head) {
+    if (head == NULL) return NULL;
+    if (head->next == NULL) {
+        head->prev->next = NULL;
+        head->prev = NULL;
+        return head;
+    } else return popBackTokenList(head->next);
 }
 void delTokenList(TokenList* head) {
     if (*head==NULL) return;
@@ -30,7 +40,30 @@ void printTokenList(TokenList head) {
     if (head->next) printTokenList(head->next);
 }
 
+TokenList pluckTokenList (TokenList item) {
+    if (item->prev) item->prev->next = item->next;
+    if (item->next) item->next->prev = item->prev;
+    item->prev = NULL;
+    item->next = NULL;
+    return item;
+}
 
+void swapTokenList(TokenList a, TokenList b) {
+    TokenList temp = newTokenList(&(b->token));
+    b->token = a->token;
+    a->token = temp->token;
+    delTokenList(&temp);
+}
+
+TokenList popFrontTokenList(TokenList head) {
+    swapTokenList(head, head->next);
+    TokenList popped = head->next;
+    head->next = head->next->next;
+    head->next->prev = head;
+    popped->prev = NULL;
+    popped->next = NULL;
+    return popped;
+}
 
 TokenList buildTokenListFromLines(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines) {
     /***************************************************************************************/
@@ -88,4 +121,152 @@ TokenList buildTokenListFromLines(const char* file_path, const FileLine file_as_
     } while (tokens_remaining);
 
     return file_as_tokens;
+}
+
+/***************************************************************************************/
+
+static const char* strAstNodeType[] = {
+    "InvalidNode",
+
+    "Namespace",
+    "TypeReference",
+    "Identifier",
+
+    "StatementEnd",
+    "ParenExprBegin",
+    "ListContinue",
+    "ParenExprEnd",
+    "BlockBegin",
+    "BlockEnd",
+    "IndexBegin",
+    "IndexEnd",
+
+    "FunctionModifier",
+    "TypeModifier",
+
+    "StructDecl",
+    "UnionDecl",
+    "EnumDecl",
+    "AliasDecl",
+    
+    "IntegerConst",
+    "FloatConst",
+    "CharacterConst",
+    "StringConst",
+
+    "ReturnStatement",
+
+    "FunctionDeclaration",
+    "Function",
+    "FunctionCall",
+
+    "Operator",
+    "AssignmentOperator",
+
+    "VariableDeclaration",
+    "VariableAssignment",
+    "Expression",
+};
+
+AstPtr newAstPtr(const Token* token) {
+    AstPtr astp = (AstPtr)malloc(sizeof(AstNode));
+
+    astp->tokens = newTokenList(token);
+
+    astp->parent = NULL;
+    for (uint i = 0; i<CASPIAN_MAX_AST_CHILDREN; i++) {
+        astp->children[i]  = NULL;
+    }
+    astp->num_children = 0;
+
+    astp->node_type = InvalidNode;
+
+    return astp;
+}
+void delAstPtr(AstPtr* astp) {
+    if (*astp==NULL) return;
+
+    (*astp)->parent = NULL;
+    delTokenList(&((*astp)->tokens));
+
+    for (uint i = 0; i<(*astp)->num_children; i++)
+        delAstPtr(&((*astp)->children[i]));
+
+    free(*astp);
+    *astp = NULL;
+}
+void printAstPtr(const AstPtr astp) {
+    printf("{%s} ", strAstNodeType[astp->node_type]); printTokenList(astp->tokens); printf("\n");
+}
+void treeAstPtr(const AstPtr astp, const uint level) {
+    for (uint i = 0; i<level; i++) printf("* ");
+    printAstPtr(astp);
+
+    for (uint j = 0; j<astp->num_children; j++)
+        treeAstPtr(astp->children[j], level+1);
+}
+
+static bool isOpenScopeToken(const Token* token) {
+    return (
+        cmpToken(token, "(") ||
+        cmpToken(token, "[") ||
+        cmpToken(token, "{")
+    );
+}
+static bool isCloseScopeToken(const Token* token) {
+    return (
+        cmpToken(token, ")") ||
+        cmpToken(token, "]") ||
+        cmpToken(token, "}")
+    );
+}
+
+static bool isScopePair(const Token* open, const Token* close) {
+    if (cmpToken(open, "(") && cmpToken(close, ")")) return true;
+    if (cmpToken(open, "[") && cmpToken(close, "]")) return true;
+    if (cmpToken(open, "{") && cmpToken(close, "}")) return true;
+    return false;
+}
+
+TokenList   gTokenListMaster    =NULL,
+            gTokenListStream    =NULL,
+            gTokenListScopeStack=NULL,
+            gTokenListLastPopped=NULL;
+
+AstPtr buildAstTree(TokenList file_as_tokens) {
+    gTokenListMaster = popFrontTokenList(file_as_tokens);
+    gTokenListStream = file_as_tokens;
+    TokenList current_token = file_as_tokens;
+
+    TokenList scope_token_stack = newTokenList(&(gTokenListMaster->token));
+    gTokenListScopeStack = scope_token_stack;
+
+    while (current_token != NULL) {
+        const Token token = current_token->token;
+
+        if (isOpenScopeToken(&token)) {
+            TokenList pushed = newTokenList(&token);
+            pushBackTokenList(scope_token_stack, pushed);
+        }
+        else if (isCloseScopeToken(&token)) {
+            gTokenListLastPopped = popBackTokenList(scope_token_stack);
+
+            if (isScopePair(&(gTokenListLastPopped->token), &token)==tokenMismatch) {
+                error_token_2(1, gTokenListLastPopped->token, token, "`%s` and `%s` are a mismatched pair.",
+                    gTokenListLastPopped->token.text, token.text);
+            }
+
+            delTokenList(&gTokenListLastPopped);
+        }
+
+        printf("`%s`\n", current_token->token.text);
+        current_token = current_token->next;
+    }
+
+
+    delTokenList(&gTokenListScopeStack);
+    delTokenList(&gTokenListMaster );
+    // delTokenList(&current_token);
+
+    return NULL;
 }
