@@ -20,6 +20,11 @@ enum AstNodeType {
     BlockEnd,
     IndexBegin,
     IndexEnd,
+    ParmsBegin,
+    ParmDeclaration,
+    ParmsEnd,
+    ArgsBegin,
+    ArgsEnd,
 
     FunctionModifier, /* static, inline */
     TypeModifier,     /* const */
@@ -39,11 +44,13 @@ enum AstNodeType {
     FunctionDeclaration,
     Function,
     FunctionCall,
+    ReturnType,
 
     Operator,
     AssignmentOperator,
     
     VariableDeclaration,
+    VariableDefinition,
     VariableAssignment,
     Expression,
 };
@@ -54,13 +61,14 @@ typedef struct token_list_s {
 } *TokenList;
 
 TokenList newTokenList     (const Token* token);
-void    pushBackTokenList  (TokenList head, TokenList item);
-void    delTokenList       (TokenList* head);
-void    printTokenList     (TokenList head);
+void      pushBackTokenList(TokenList head, TokenList item);
+void      delTokenList     (TokenList* head);
+void      printTokenList   (TokenList head);
 TokenList pluckTokenList   (TokenList item);
 TokenList popBackTokenList (TokenList head);
 TokenList popFrontTokenList(TokenList head);
 void      swapTokenList    (TokenList a, TokenList b);
+TokenList moveNewTokenList (TokenList* original);
 
 TokenList buildTokenListFromLines(const char* file_path, const FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE], const uint num_file_lines);
 
@@ -77,10 +85,15 @@ typedef struct AstNode {
     struct AstNode  *children;
 } *AstPtr;
 
-AstPtr newAstPtr  (const Token* token);
-void   delAstPtr  (AstPtr* astp);
-void   printAstPtr(const AstPtr astp);
-void   treeAstPtr (const AstPtr astp, const uint level);
+AstPtr newAstPtr     (const Token* token);
+void   delAstPtr     (AstPtr* astp);
+void   printAstPtr   (const AstPtr astp);
+void   treeAstPtr    (const AstPtr astp, const uint level);
+AstPtr getLastAstPtr (const AstPtr head);
+void   appendAstPtr  (AstPtr head  , AstPtr next);
+void   addChildAstPtr(AstPtr parent, AstPtr child);
+AstPtr pluckAstPtr   (AstPtr astp);
+bool   cmpAstPtr     (AstPtr astp, const char* token);
 
 // /***************************************************************************************/
 

@@ -21,13 +21,27 @@ $(APP): $(OBJS) $(HDRS)
 release:
 	$(CC) $(CFLAGS) $(INCLUDE)       -O2 -o $@ $(SRCS)
 
-# EXAMPLE:=./examples/simplest.c
-EXAMPLE:=./examples/hello_world.c
+SIMPLEST:=./examples/simplest.c
+HELLO_WORLD:=./examples/hello_world.c
+VARS:=./examples/vars.c
+EXAMPLE:=$(HELLO_WORLD)
 test: $(APP)
 	./$(APP) $(EXAMPLE)
+simplest: $(APP)
+	./$(APP) $(SIMPLEST)
+hello-world: $(APP)
+	./$(APP) $(HELLO_WORLD)
+vars: $(APP)
+	./$(APP) $(VARS)
 
 clean:
 	rm -rf $(OBJ)/*.o $(APP)
 
 valgrind: $(APP)
 	valgrind -s --leak-check=full --show-leak-kinds=all ./$(APP) $(EXAMPLE)
+valgrind-simplest: $(APP)
+	valgrind -s --leak-check=full --show-leak-kinds=all ./$(APP) $(SIMPLEST)
+valgrind-hello-world: $(APP)
+	valgrind -s --leak-check=full --show-leak-kinds=all ./$(APP) $(HELLO_WORLD)
+valgrind-vars: $(APP)
+	valgrind -s --leak-check=full --show-leak-kinds=all ./$(APP) $(VARS)

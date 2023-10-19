@@ -13,7 +13,10 @@ bool  isWhitespace(const char c);
 #include "lexer.h"
 // bool isAlpha(const char c);
 // bool isDigit(const char c);
-bool isInteger(const Token* token);
+bool isInteger  (const Token* token);
+bool isFloat    (const Token* token);
+bool isString   (const Token* token);
+bool isCharacter(const Token* token);
 
 #define isAlpha(C) ((C >= 'A' && C <= 'Z') || (C >= 'a' && C <= 'z'))
 #define isDec(D)    (D >= '0' && D <= '9')

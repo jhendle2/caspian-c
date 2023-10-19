@@ -76,8 +76,8 @@ ExitCode processFile(const char* file_path) {
     // printTokenList( file_as_tokens); printf("\n");
 
     AstPtr master_node = buildAstTree(file_as_tokens);
-    printf("\n[Tree]\n");
-    treeAstPtr(master_node, 0);
+    // printf("\n[Tree]\n");
+    // treeAstPtr(master_node, 0);
 
     delTokenList  (&file_as_tokens);
     delAstPtr     (&master_node);

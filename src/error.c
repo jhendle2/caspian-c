@@ -10,13 +10,13 @@ void safeExit(const ExitCode exit_code) {
     extern TokenList
             gTokenListMaster    ,
             gTokenListStream    ,
-            gTokenListScopeStack,
-            gTokenListLastPopped;
+            gTokenListScopeStack;
+            // gTokenListLastPopped;
         
     delTokenList(&gTokenListMaster);
     delTokenList(&gTokenListStream);
     delTokenList(&gTokenListScopeStack);
-    delTokenList(&gTokenListLastPopped);
+    // delTokenList(&gTokenListLastPopped); /* Not needed for some reason? */
     printf("Succesfully cleaned-up all dangling token-lists\n");
 
 
@@ -25,23 +25,5 @@ void safeExit(const ExitCode exit_code) {
     printf("Successfully cleaned-up all dangling AST-nodes\n");
 
     /********************************************************************/
-    // extern SyntaxPtr gCurrentSyntaxMaster;
-    // extern uint gTotalSyntaxNodes, gTotalSyntaxFrees;
-
-    // if (gTotalSyntaxNodes > 0) {
-    //     delSyntaxPtr(&gCurrentSyntaxMaster);
-    //     printf("Succesfully cleaned-up [%u/%u] in `gCurrentSyntaxMaster`\n", gTotalSyntaxFrees, gTotalSyntaxNodes);
-    // } else {
-    //     printf("No clean-up necessary for parser\n");
-    // }
-    
-    /********************************************************************/
-    // extern AstPtr gCurrentAstMaster;
-    // extern uint gTotalAstNodes, gTotalAstFrees;
-    // delAstPtr(&gCurrentAstMaster);
-    // printf("Succesfully cleaned-up [%u/%u] in `gCurrentAstMaster`\n", gTotalAstFrees, gTotalAstNodes);
-
-    /********************************************************************/
-    
     exit(exit_code);
 }

@@ -20,7 +20,7 @@ void pushBackTokenList(TokenList head, TokenList item) {
 TokenList popBackTokenList(TokenList head) {
     if (head == NULL) return NULL;
     if (head->next == NULL) {
-        head->prev->next = NULL;
+        if (head->prev) head->prev->next = NULL;
         head->prev = NULL;
         return head;
     } else return popBackTokenList(head->next);
@@ -53,6 +53,12 @@ void swapTokenList(TokenList a, TokenList b) {
     b->token = a->token;
     a->token = temp->token;
     delTokenList(&temp);
+}
+
+TokenList moveNewTokenList(TokenList* original) {
+    TokenList new = *original;
+    *original = NULL;
+    return new;
 }
 
 TokenList popFrontTokenList(TokenList head) {
@@ -126,7 +132,7 @@ TokenList buildTokenListFromLines(const char* file_path, const FileLine file_as_
 /***************************************************************************************/
 
 static const char* strAstNodeType[] = {
-    "InvalidNode",
+    MAGENTA"InvalidNode"RESET,
 
     "Namespace",
     "TypeReference",
@@ -140,6 +146,11 @@ static const char* strAstNodeType[] = {
     "BlockEnd",
     "IndexBegin",
     "IndexEnd",
+    "ParmsBegin",
+    "ParmDeclaration",
+    "ParmsEnd",
+    "ArgsBegin",
+    "ArgsEnd",
 
     "FunctionModifier",
     "TypeModifier",
@@ -159,14 +170,28 @@ static const char* strAstNodeType[] = {
     "FunctionDeclaration",
     "Function",
     "FunctionCall",
+    "ReturnType",
 
     "Operator",
     "AssignmentOperator",
 
     "VariableDeclaration",
+    "VariableDefinition",
     "VariableAssignment",
     "Expression",
 };
+
+static bool isConstantType(const enum AstNodeType node_type) {
+    switch (node_type) {
+        case IntegerConst:
+        case FloatConst:
+        case CharacterConst:
+        case StringConst:
+            return true;
+        default:
+            return false;
+    }
+}
 
 AstPtr newAstPtr(const Token* token) {
     AstPtr astp = (AstPtr)malloc(sizeof(struct AstNode));
@@ -210,14 +235,17 @@ uint lenAstPtr(AstPtr head) {
     return 0;
 }
 void printAstPtr(const AstPtr astp) {
-    // printf("{%s} <%u> [next=`%s`] [child=`%s`]",
-    // printf("{%s} <%u> ",
-    printf("{%s} ",
-        strAstNodeType[astp->node_type]
+    // printf("{%s} <%u> [next=`%s`] [child=`%s`]"
+    // printf("{%s} <%u> "
+    printf("{%s} "
+        , strAstNodeType[astp->node_type]
         // , lenAstPtr(astp->children)
-        // , astp->next ? astp->next->tokens->token.text : "NULL",
+        // , astp->next ? astp->next->tokens->token.text : "NULL"
         // , astp->children ? astp->children->tokens->token.text : "NULL"
-    ); printTokenList(astp->tokens); printf("\n");
+    );
+    if (isConstantType(astp->node_type)) printf(BMAGENTA);
+    printTokenList(astp->tokens); printf("\n");
+    if (isConstantType(astp->node_type)) printf(RESET);
 }
 void treeAstPtr(const AstPtr astp, const uint level) {
     for (uint i = 0; i<level; i++) printf("* ");
@@ -230,19 +258,33 @@ void treeAstPtr(const AstPtr astp, const uint level) {
     if (next) treeAstPtr(next, level);
 }
 
-AstPtr getLast(AstPtr head) {
+AstPtr getLastAstPtr(const AstPtr head) {
     // printf("get last\n");
-    if (head->next) return getLast(head->next);
+    if (head->next) return getLastAstPtr(head->next);
     return head;
 }
 
-static void addChild(AstPtr parent, AstPtr child) {
+void appendAstPtr(AstPtr head, AstPtr next) {
+    head->next  = next;
+    next->prev = head;
+}
+AstPtr pluckAstPtr(AstPtr astp) {
+    AstPtr prev = astp->prev;
+    AstPtr next = astp->next;
+    if (prev) prev->next = next;
+    if (next) next->prev = prev;
+    astp->prev   = NULL;
+    astp->next   = NULL;
+    astp->parent = NULL;
+    return astp;
+}
+
+void addChildAstPtr(AstPtr parent, AstPtr child) {
     // printf("adding (%s) to (%s) [%u]\n", child->tokens->token.text, parent->tokens->token.text, lenAstPtr(parent->children));
     child->parent = parent;
     if (parent->children) {
-        AstPtr last = getLast(parent->children);
-        last->next  = child;
-        child->prev = last;
+        AstPtr last = getLastAstPtr(parent->children);
+        appendAstPtr(last, child);
     } else {
         parent->children = child;
     }
@@ -276,6 +318,7 @@ TokenList gTokenListMaster    =NULL,
           gTokenListLastPopped=NULL;
 AstPtr    gAstMaster          =NULL;
 
+#include <assert.h>
 AstPtr buildFirstPass(TokenList file_as_tokens) {
     gTokenListMaster = popFrontTokenList(file_as_tokens);
     gTokenListStream = file_as_tokens;
@@ -290,9 +333,10 @@ AstPtr buildFirstPass(TokenList file_as_tokens) {
 
     while (current_token != NULL) {
         const Token token = current_token->token;
+        // printToken(&token);
 
         AstPtr child_astp = newAstPtr(&token);
-        addChild(current_astp, child_astp);
+        addChildAstPtr(current_astp, child_astp);
 
         if (isOpenScopeToken(&token)) {
             TokenList pushed = newTokenList(&token);
@@ -304,8 +348,19 @@ AstPtr buildFirstPass(TokenList file_as_tokens) {
             gTokenListLastPopped = popBackTokenList(scope_token_stack);
 
             if (isScopePair(&(gTokenListLastPopped->token), &token)==tokenMismatch) {
-                error_token_2(1, gTokenListLastPopped->token, token, "`%s` and `%s` are a mismatched pair.",
-                    gTokenListLastPopped->token.text, token.text);
+                if (cmpTokens(&(gTokenListLastPopped->token), &(gTokenListMaster->token))) { /* If we compare w/ the master token */
+                    error_token(1, token, 
+                        MAGENTA"`%s`"RESET" is missing its open pair",
+                        token.text
+                    );
+                }
+                else {
+                    error_token_2(1, gTokenListLastPopped->token, token, 
+                        MAGENTA"`%s`"RESET" and "
+                        MAGENTA"`%s`"RESET" are a mismatched pair",
+                        gTokenListLastPopped->token.text, token.text
+                    );
+                }
             }
 
             delTokenList(&gTokenListLastPopped);
@@ -314,6 +369,11 @@ AstPtr buildFirstPass(TokenList file_as_tokens) {
 
         // printf("`%s`\n", current_token->token.text);
         current_token = current_token->next;
+    }
+
+    if (current_astp != gAstMaster) {
+        error_token(1, current_astp->tokens->token,
+            "Mismatched "MAGENTA"`%s`"RESET, current_astp->tokens->token.text);
     }
 
 
@@ -326,7 +386,7 @@ AstPtr buildFirstPass(TokenList file_as_tokens) {
 #include "grammar.h"
 AstPtr buildSecondPass(AstPtr first_pass_astp) {
     if (first_pass_astp == NULL) return NULL;
-    printAstPtr(first_pass_astp);
+    // printAstPtr(first_pass_astp);
 
     gAstMaster = first_pass_astp;
     AstPtr current_astp = gAstMaster;
@@ -344,6 +404,19 @@ AstPtr buildSecondPass(AstPtr first_pass_astp) {
 
 AstPtr buildAstTree(TokenList file_as_tokens) {
     AstPtr first_pass_astp  = buildFirstPass(file_as_tokens);
+    printf("\n[FirstPass]\n");
+    treeAstPtr(first_pass_astp, 0);
+    printf("\n");
+
     AstPtr second_pass_astp = buildSecondPass(first_pass_astp);
+    printf("\n[SecondPass]\n");
+    treeAstPtr(second_pass_astp, 0);
+    printf("\n");
     return second_pass_astp;
+}
+
+bool cmpAstPtr(AstPtr astp, const char* token) {
+    if (astp==NULL) return false;
+    if (astp->tokens==NULL) return false;
+    return cmpToken(&(astp->tokens->token), token);
 }

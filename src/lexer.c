@@ -84,10 +84,12 @@ void printToken(const Token* token) {
 }
 
 bool cmpToken(const Token* token, const char* str) {
+    if (token==NULL) return false;
     return (strncmp(token->text, str, CASPIAN_MAX_TOKEN_SZ)==0);
 }
 
 bool cmpTokens(const Token* token, const Token* other) {
+    if (token==NULL || other==NULL) return false;
     return (strncmp(token->text, other->text, CASPIAN_MAX_TOKEN_SZ)==0);
 }
 
@@ -248,6 +250,21 @@ uint tokenizeLine(const FileLine* fl, Token tokens[CASPIAN_MAX_TOKENS_IN_LINE]) 
 
         if (c == '.' && buf_index>0 && isDec(buf[buf_index-1])) {
             appendChar (c);
+            continue;
+        }
+
+        if (c == '-' && isDec(d)) { /* Negative numbers */
+            if (buf_index>0) { /* "X-Y" is "X" "-" "Y" not "X" "-Y" */
+                appendToken(buf, i); 
+                appendChar (c);
+                appendToken(buf, i);
+                appendChar (d);
+                i++;
+            } else {           /* Else, we're a negative number */
+                appendChar (c);
+                appendChar (d);
+                i++;
+            }
             continue;
         }
 
