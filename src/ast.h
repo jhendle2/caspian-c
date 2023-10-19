@@ -73,7 +73,8 @@ typedef struct AstNode {
     uint            num_children;
     TokenList       tokens;
     struct AstNode *parent;
-    struct AstNode *children[CASPIAN_MAX_AST_CHILDREN];
+    struct AstNode *prev, *next;
+    struct AstNode *children;
 } *AstPtr;
 
 AstPtr newAstPtr  (const Token* token);

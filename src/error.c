@@ -20,6 +20,10 @@ void safeExit(const ExitCode exit_code) {
     printf("Succesfully cleaned-up all dangling token-lists\n");
 
 
+    extern AstPtr gAstMaster;
+    delAstPtr(&gAstMaster);
+    printf("Successfully cleaned-up all dangling AST-nodes\n");
+
     /********************************************************************/
     // extern SyntaxPtr gCurrentSyntaxMaster;
     // extern uint gTotalSyntaxNodes, gTotalSyntaxFrees;

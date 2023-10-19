@@ -173,11 +173,14 @@ AstPtr newAstPtr(const Token* token) {
 
     astp->tokens = newTokenList(token);
 
-    astp->parent = NULL;
-    for (uint i = 0; i<CASPIAN_MAX_AST_CHILDREN; i++) {
-        astp->children[i]  = NULL;
-    }
-    astp->num_children = 0;
+    astp->parent   = NULL;
+    astp->next     = NULL;
+    astp->prev     = NULL;
+    astp->children = NULL;
+    // for (uint i = 0; i<CASPIAN_MAX_AST_CHILDREN; i++) {
+    //     astp->children[i]  = NULL;
+    // }
+    // astp->num_children = 0;
 
     astp->node_type = InvalidNode;
 
@@ -189,21 +192,60 @@ void delAstPtr(AstPtr* astp) {
     (*astp)->parent = NULL;
     delTokenList(&((*astp)->tokens));
 
-    for (uint i = 0; i<(*astp)->num_children; i++)
-        delAstPtr(&((*astp)->children[i]));
+    // for (uint i = 0; i<(*astp)->num_children; i++)
+    //     delAstPtr(&((*astp)->children[i]));
+    (*astp)->prev = NULL;
+
+    if ((*astp)->next) delAstPtr(&((*astp)->next));
+    (*astp)->next = NULL;
+
+    if ((*astp)->children) delAstPtr(&((*astp)->children));
+    (*astp)->children = NULL;
 
     free(*astp);
     *astp = NULL;
 }
+uint lenAstPtr(AstPtr head) {
+    if (head) return 1 + lenAstPtr(head->next);
+    return 0;
+}
 void printAstPtr(const AstPtr astp) {
-    printf("{%s} ", strAstNodeType[astp->node_type]); printTokenList(astp->tokens); printf("\n");
+    // printf("{%s} <%u> [next=`%s`] [child=`%s`]",
+    // printf("{%s} <%u> ",
+    printf("{%s} ",
+        strAstNodeType[astp->node_type]
+        // , lenAstPtr(astp->children)
+        // , astp->next ? astp->next->tokens->token.text : "NULL",
+        // , astp->children ? astp->children->tokens->token.text : "NULL"
+    ); printTokenList(astp->tokens); printf("\n");
 }
 void treeAstPtr(const AstPtr astp, const uint level) {
     for (uint i = 0; i<level; i++) printf("* ");
     printAstPtr(astp);
 
-    for (uint j = 0; j<astp->num_children; j++)
-        treeAstPtr(astp->children[j], level+1);
+    AstPtr children = astp->children;
+    if (children) treeAstPtr(children, level+1);
+
+    AstPtr next = astp->next;
+    if (next) treeAstPtr(next, level);
+}
+
+AstPtr getLast(AstPtr head) {
+    // printf("get last\n");
+    if (head->next) return getLast(head->next);
+    return head;
+}
+
+static void addChild(AstPtr parent, AstPtr child) {
+    // printf("adding (%s) to (%s) [%u]\n", child->tokens->token.text, parent->tokens->token.text, lenAstPtr(parent->children));
+    child->parent = parent;
+    if (parent->children) {
+        AstPtr last = getLast(parent->children);
+        last->next  = child;
+        child->prev = last;
+    } else {
+        parent->children = child;
+    }
 }
 
 static bool isOpenScopeToken(const Token* token) {
@@ -228,12 +270,13 @@ static bool isScopePair(const Token* open, const Token* close) {
     return false;
 }
 
-TokenList   gTokenListMaster    =NULL,
-            gTokenListStream    =NULL,
-            gTokenListScopeStack=NULL,
-            gTokenListLastPopped=NULL;
+TokenList gTokenListMaster    =NULL,
+          gTokenListStream    =NULL,
+          gTokenListScopeStack=NULL,
+          gTokenListLastPopped=NULL;
+AstPtr    gAstMaster          =NULL;
 
-AstPtr buildAstTree(TokenList file_as_tokens) {
+AstPtr buildFirstPass(TokenList file_as_tokens) {
     gTokenListMaster = popFrontTokenList(file_as_tokens);
     gTokenListStream = file_as_tokens;
     TokenList current_token = file_as_tokens;
@@ -241,12 +284,21 @@ AstPtr buildAstTree(TokenList file_as_tokens) {
     TokenList scope_token_stack = newTokenList(&(gTokenListMaster->token));
     gTokenListScopeStack = scope_token_stack;
 
+    gAstMaster = newAstPtr(&(gTokenListMaster->token));
+    gAstMaster->node_type = Namespace;
+    AstPtr current_astp = gAstMaster;
+
     while (current_token != NULL) {
         const Token token = current_token->token;
+
+        AstPtr child_astp = newAstPtr(&token);
+        addChild(current_astp, child_astp);
 
         if (isOpenScopeToken(&token)) {
             TokenList pushed = newTokenList(&token);
             pushBackTokenList(scope_token_stack, pushed);
+
+            current_astp = child_astp;
         }
         else if (isCloseScopeToken(&token)) {
             gTokenListLastPopped = popBackTokenList(scope_token_stack);
@@ -257,16 +309,22 @@ AstPtr buildAstTree(TokenList file_as_tokens) {
             }
 
             delTokenList(&gTokenListLastPopped);
+            current_astp = current_astp->parent;
         }
 
-        printf("`%s`\n", current_token->token.text);
+        // printf("`%s`\n", current_token->token.text);
         current_token = current_token->next;
     }
 
 
     delTokenList(&gTokenListScopeStack);
-    delTokenList(&gTokenListMaster );
-    // delTokenList(&current_token);
+    delTokenList(&gTokenListMaster);
 
-    return NULL;
+    return gAstMaster;
+}
+
+AstPtr buildAstTree(TokenList file_as_tokens) {
+    AstPtr first_pass_astp = buildFirstPass(file_as_tokens);
+    
+    return first_pass_astp;
 }
