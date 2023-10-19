@@ -1,6 +1,8 @@
 #ifndef CASPIAN_UTILS_H
 #define CASPIAN_UTILS_H
 
+#include <stdbool.h>
+
 /* String Utils */
 char* lstrip(char* s);
 void  replace(char* s, const char original, const char replacement);

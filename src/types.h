@@ -4,7 +4,8 @@
 #include "lexer.h"
 
 #define CASPIAN_MAX_CUSTOM_TYPES 128
-#define CASPIAN_MAX_TOKENS_IN_TYPE_RECALL 16
+// #define CASPIAN_MAX_TOKENS_IN_TYPE_RECALL 16
+#define CASPIAN_MAX_TOKENS_IN_TYPE_RECALL CASPIAN_MAX_TOKENS_IN_LINE
 
 typedef struct {
     uint value_len;

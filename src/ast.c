@@ -169,7 +169,7 @@ static const char* strAstNodeType[] = {
 };
 
 AstPtr newAstPtr(const Token* token) {
-    AstPtr astp = (AstPtr)malloc(sizeof(AstNode));
+    AstPtr astp = (AstPtr)malloc(sizeof(struct AstNode));
 
     astp->tokens = newTokenList(token);
 
@@ -323,8 +323,27 @@ AstPtr buildFirstPass(TokenList file_as_tokens) {
     return gAstMaster;
 }
 
-AstPtr buildAstTree(TokenList file_as_tokens) {
-    AstPtr first_pass_astp = buildFirstPass(file_as_tokens);
-    
+#include "grammar.h"
+AstPtr buildSecondPass(AstPtr first_pass_astp) {
+    if (first_pass_astp == NULL) return NULL;
+    printAstPtr(first_pass_astp);
+
+    gAstMaster = first_pass_astp;
+    AstPtr current_astp = gAstMaster;
+
+    /* Discern my node type, combining any nodes that need to be */
+    discernNodeType(&current_astp);
+
+    /* And process anyone left over */
+    buildSecondPass(current_astp->children);
+    buildSecondPass(current_astp->next);
+    current_astp = current_astp->next;
+
     return first_pass_astp;
+}
+
+AstPtr buildAstTree(TokenList file_as_tokens) {
+    AstPtr first_pass_astp  = buildFirstPass(file_as_tokens);
+    AstPtr second_pass_astp = buildSecondPass(first_pass_astp);
+    return second_pass_astp;
 }

@@ -3,6 +3,6 @@
 
 #include "ast.h"
 
-enum AstNodeType discernNodeType(const AstPtr head);
+void discernNodeType(AstPtr* head);
 
 #endif /* CASPIAN_GRAMMAR_H */

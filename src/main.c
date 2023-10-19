@@ -10,7 +10,7 @@
 ExitCode processFile(const char* file_path) {
 
     // TODO: Remove, only for testing tokenizer 
-    FileLine file_as_lines[CASPIAN_MAX_FILELINE_SZ];
+    FileLine file_as_lines[CASPIAN_MAX_LINES_IN_FILE];
     uint num_file_lines = readFileAsLines(file_path, file_as_lines);
 
     // for (uint i = 0; i<num_file_lines; i++) {
@@ -76,6 +76,7 @@ ExitCode processFile(const char* file_path) {
     // printTokenList( file_as_tokens); printf("\n");
 
     AstPtr master_node = buildAstTree(file_as_tokens);
+    printf("\n[Tree]\n");
     treeAstPtr(master_node, 0);
 
     delTokenList  (&file_as_tokens);

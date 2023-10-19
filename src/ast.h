@@ -69,12 +69,12 @@ TokenList buildTokenListFromLines(const char* file_path, const FileLine file_as_
 #define CASPIAN_MAX_AST_CHILDREN 128
 
 typedef struct AstNode {
-    AstNodeType     node_type;
-    uint            num_children;
-    TokenList       tokens;
-    struct AstNode *parent;
-    struct AstNode *prev, *next;
-    struct AstNode *children;
+    enum AstNodeType node_type;
+    uint             num_children;
+    TokenList        tokens;
+    struct AstNode  *parent;
+    struct AstNode  *prev, *next;
+    struct AstNode  *children;
 } *AstPtr;
 
 AstPtr newAstPtr  (const Token* token);

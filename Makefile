@@ -1,5 +1,6 @@
-CXX:=g++
-CXXFLAGS:=-ansi -Wall -DDISABLE_PREPROCESSOR
+CC:=gcc
+# CFLAGS:=-ansi -Wall -DDISABLE_PREPROCESSOR
+CFLAGS:=-std=c99 -Wall -DDISABLE_PREPROCESSOR
 
 SRC:=./src
 OBJ:=./obj
@@ -12,15 +13,16 @@ INCLUDE:=-I$(SRC)
 APP:=caspian
 
 $(OBJ)/%.o: $(SRC)/%.c $(HDRS)
-	$(CXX) $(CXXFLAGS) $(INCLUDE) -c -g -Og -o $@ $<
+	$(CC) $(CFLAGS) $(INCLUDE) -c -g -Og -o $@ $<
 
 $(APP): $(OBJS) $(HDRS)
-	$(CXX) $(CXXFLAGS) $(INCLUDE)    -g -Og -o $@ $(OBJS)
+	$(CC) $(CFLAGS) $(INCLUDE)    -g -Og -o $@ $(OBJS)
 
 release:
-	$(CXX) $(CXXFLAGS) $(INCLUDE)       -O2 -o $@ $(SRCS)
+	$(CC) $(CFLAGS) $(INCLUDE)       -O2 -o $@ $(SRCS)
 
-EXAMPLE:=./examples/simplest.c
+# EXAMPLE:=./examples/simplest.c
+EXAMPLE:=./examples/hello_world.c
 test: $(APP)
 	./$(APP) $(EXAMPLE)
 

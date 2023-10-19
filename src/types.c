@@ -20,7 +20,7 @@ void addTypeAlias(const Token* key, const Token value[CASPIAN_MAX_TOKENS_IN_TYPE
     copyTokens(gTypeMap[gTypeMapIndex].value, value, value_len);
     gTypeMapIndex++;
 }
-TypeStatus recallTypeAlias(const Token* key, Token value[CASPIAN_MAX_TOKENS_IN_TYPE_RECALL], uint* value_len) {
+enum TypeStatus recallTypeAlias(const Token* key, Token value[CASPIAN_MAX_TOKENS_IN_TYPE_RECALL], uint* value_len) {
     for (uint i = 0; i<gTypeMapIndex; i++) {
         const TypeMapEntry map_entry = gTypeMap[i];
         if (cmpTokens( &(map_entry.key), key) ) {
