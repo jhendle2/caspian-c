@@ -5,6 +5,7 @@
 #include "utils.h"
 #include "types.h"
 #include "error.h"
+#include "keywords.h"
 
 #define next1(ASTP) (      ASTP->next  ?       ASTP->next  : NULL)
 #define next2(ASTP) (next1(ASTP->next) ? next1(ASTP->next) : NULL)
@@ -16,7 +17,8 @@ static bool isPossibleIdentifier(const Token* token) {
     return !(
         isType(token) ||
         isOperatorDelimiter(token) ||
-        isDec(token->text[0])
+        isDec(token->text[0]) ||
+        isKeyword(token)
     );
 }
 
@@ -29,6 +31,12 @@ static bool isTypeOrDescriptor(const Token* token) {
 }
 
 static bool typeConcatenator(AstPtr* type_builder) {
+    /* 
+        Some types are split over multiple tokens.
+        This function attempts to recombine them into one token list. 
+        Ex:
+        - [static], [const], [char], [*], [*] --> [static, const, char, *, *]
+    */
     bool is_concatenated_type = false;
     AstPtr possible_descriptor = (*type_builder)->next;
     while (possible_descriptor && isTypeOrDescriptor(&(possible_descriptor->tokens->token))) {
@@ -49,6 +57,7 @@ static bool typeConcatenator(AstPtr* type_builder) {
 void discernNodeType(AstPtr* head_ptr) {
     AstPtr head = *head_ptr;
     const Token first = head->tokens->token;
+    // printf("discerning(%s)\n", first.text);
 
     if (isInteger  (&first))         { head->node_type = IntegerConst  ; return; }
     if (isFloat    (&first))         { head->node_type = FloatConst    ; return; }
@@ -81,38 +90,15 @@ void discernNodeType(AstPtr* head_ptr) {
 
             /* Parms */
             AstPtr parms_end = getLastAstPtr(parms_begin->children);
-            // if (cmpAstPtr(parms_end, ")")==false)
-            //     error_token(1, parms_begin->tokens->token, "Parameter list missing its closing parenthesis");
             parms_begin = pluckAstPtr(parms_begin);
             parms_begin->node_type = ParmsBegin;
-
-            AstPtr parms = parms_begin->children;
-            // AstPtr current_parm = NULL;
-            // TokenList parm_tokens = NULL;
-            while (parms) {
-                if (cmpAstPtr(parms, ")")) break;
-                printf("parm: %s\n", parms->tokens->token.text);
-
-                AstPtr next = parms->next;
-                
-                if (cmpAstPtr(parms, ",")) {
-                    // FIXME: ???
-                }
-
-                printf("discerning [%s]\n", parms->tokens->token.text);
-                discernNodeType(&parms);
-                parms = next;
-            }
-            // if (current_parm) addChildAstPtr(parms_begin, current_parm);
 
             parms_end->node_type = ParmsEnd  ;
             addChildAstPtr(function, parms_begin);
 
             /* Block */
             AstPtr block_end = getLastAstPtr(block_begin->children);
-            // if (cmpAstPtr(block_end, "}")==false)
-            //     error_token(1, block_begin->tokens->token, "Function block missing its closing brace");
-                   block_begin = pluckAstPtr  (block_begin);
+                block_begin = pluckAstPtr  (block_begin);
             block_begin->node_type = BlockBegin;
             block_end  ->node_type = BlockEnd  ;
             addChildAstPtr(function, block_begin);
@@ -133,7 +119,8 @@ void discernNodeType(AstPtr* head_ptr) {
             /* Varaible-Declaration */
             AstPtr variable = head;
             variable->node_type = VariableDeclaration;
-            if (semicolon->node_type==ParmsEnd) variable->node_type = ParmDeclaration;
+            if (variable->parent->node_type==ParmsBegin) variable->node_type = ParmDeclaration;
+            if (semicolon->node_type==ParmsEnd)          variable->node_type = ParmDeclaration;
 
 
             /* Append name */
@@ -181,6 +168,7 @@ void discernNodeType(AstPtr* head_ptr) {
         }
     }
 
+    /* Return statement */
     AstPtr return_kw = head;
     if (cmpToken(&first, "return")) {
         return_kw->node_type = ReturnStatement;
@@ -199,21 +187,29 @@ void discernNodeType(AstPtr* head_ptr) {
         return;
     }
 
+    /* Function call, Conditional, Switch, or Loop */
     AstPtr function_call = head;
     AstPtr args_begin    = next1(function_call);
     if (
-        isPossibleIdentifier(&(function_call ->tokens->token)) &&
+        (
+            isPossibleIdentifier(&(function_call->tokens->token)) ||
+            isConditional(&(function_call->tokens->token)) ||
+            isLoop(&(function_call->tokens->token))
+        ) &&
             cmpAstPtr(args_begin, "(")
     ) {
-        function_call->node_type = FunctionCall;
+        if (isPossibleIdentifier(&(function_call->tokens->token)))
+            function_call->node_type = FunctionCall;
+        if (isConditional(&(function_call->tokens->token)))
+            function_call->node_type = Conditional;
+        if (isLoop(&(function_call->tokens->token)))
+            function_call->node_type = Loop;
+
         args_begin->node_type = ArgsBegin;
         AstPtr args_end = getLastAstPtr(args_begin->children);
-        // if (cmpAstPtr(args_end, ")")==false)
-        //         error_token(1, args_begin->tokens->token, "Arguments list missing its closing parenthesis");
         args_end->node_type = ArgsEnd;
         return;
     }
-
 
     AstPtr possible_variable = head;
     if (isPossibleIdentifier(&(function_call ->tokens->token))) {

@@ -179,6 +179,10 @@ static const char* strAstNodeType[] = {
     "VariableDefinition",
     "VariableAssignment",
     "Expression",
+
+    "Conditional",
+    "Switch",
+    "Loop",
 };
 
 static bool isConstantType(const enum AstNodeType node_type) {

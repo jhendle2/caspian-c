@@ -53,6 +53,10 @@ enum AstNodeType {
     VariableDefinition,
     VariableAssignment,
     Expression,
+
+    Conditional,
+    Switch,
+    Loop,
 };
 
 typedef struct token_list_s {
