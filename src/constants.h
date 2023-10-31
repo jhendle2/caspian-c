@@ -35,4 +35,6 @@ extern uint gAsmConstantTableSz;
 void addAsmConstant(const AsmConstant* asm_const);
 bool getAsmConstant(const Token* token, AsmConstant* asm_const);
 
+Token repairAsmStringConst(const Token* string_const);
+
 #endif /* CASPIAN_CONSTANTS_H */

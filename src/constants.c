@@ -25,6 +25,56 @@ bool getAsmConstant(const Token* token, AsmConstant* asm_const) {
     } return false;
 }
 
+Token repairAsmStringConst(const Token* string_const) {
+    printf(MAGENTA"REPAIRING...\n"RESET);
+    Token repaired = newToken(string_const->offset, &(string_const->origin), "");
+    uint repaired_index = 0;
+
+    #define appendChar(C) {\
+        repaired.text[repaired_index++]=C;\
+    }
+
+    for (uint i = 0; i<(CASPIAN_MAX_TOKEN_SZ-1); i++) {
+        const char c = string_const->text[i];
+        if (c == 0) break;
+
+        const char d = string_const->text[i+1];
+        if (c == '\\') {
+            appendChar('\"');
+            appendChar(',');
+            appendChar(' ');
+            switch (d) {
+                // FIXME: So unbelievably sloppy - You should be ashamed of yourself!
+                case 'a' : appendChar('0'); appendChar('x'); appendChar('0'); appendChar('7'); break;
+                case 'b' : appendChar('0'); appendChar('x'); appendChar('0'); appendChar('8'); break;
+                case 'e' : appendChar('0'); appendChar('x'); appendChar('1'); appendChar('B'); break;
+                case 'f' : appendChar('0'); appendChar('x'); appendChar('0'); appendChar('C'); break;
+                case 'n' : appendChar('0'); appendChar('x'); appendChar('0'); appendChar('A'); break;
+                case 'r' : appendChar('0'); appendChar('x'); appendChar('0'); appendChar('D'); break;
+                case 't' : appendChar('0'); appendChar('x'); appendChar('0'); appendChar('9'); break;
+                case 'v' : appendChar('0'); appendChar('x'); appendChar('0'); appendChar('B'); break;
+                case '\\': appendChar('0'); appendChar('x'); appendChar('5'); appendChar('C'); break;
+                case '\'': appendChar('0'); appendChar('x'); appendChar('2'); appendChar('7'); break;
+                case '\"': appendChar('0'); appendChar('x'); appendChar('2'); appendChar('2'); break;
+                default:
+                    error_token(1, *string_const, "Not a recognized escape sequence "MAGENTA"`%c%c`"RESET, c, d);
+                    break;
+            }
+            i++;
+            const char e = string_const->text[i+1];
+            if (e != '\"') { /* There's more left in the string */
+                appendChar(',');
+                appendChar(' ');
+                appendChar('\"');
+            } else i++; /* So we skip the final close quote if the string constant ended with an escape sequence */
+            continue;
+        }
+        else appendChar(c);
+    }
+    printf(MAGENTA"REPAIRED=%s\n"RESET, repaired.text);
+    return repaired;
+}
+
 bool isIntegerConst(const Token* token) {
     return (isDecConst(token) || isHexConst(token));
 }

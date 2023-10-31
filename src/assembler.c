@@ -48,7 +48,7 @@ static AsmConstant addToSegment(AsmWriteBlock* segment, const AstPtr constant) {
 
     AsmConstant new_asm_const = {
         .id=0,
-        .token=token,
+        .token=repairAsmStringConst(&token),
         .type=ACT_BYTE,
         .data_identifier=""
     };
@@ -62,7 +62,7 @@ static AsmConstant addToSegment(AsmWriteBlock* segment, const AstPtr constant) {
         sprintf(new_asm_const.data_identifier, "const%u", new_asm_const.id);
         sprintf(constant_segment.middle, "\t%s: db %s\n\t%s_len: equ $ - %s\n",
                 new_asm_const.data_identifier,
-                token.text, new_asm_const.data_identifier, new_asm_const.data_identifier);
+                new_asm_const.token.text, new_asm_const.data_identifier, new_asm_const.data_identifier);
         strcat(segment->middle, constant_segment.middle);
         printf("Constant-ID=%u\n", constant_id);
         // return constant_id;
@@ -174,7 +174,7 @@ static const RegisterConst gAsmRegisters[16][5] = {
     {"r14", "r14d", "r14w", "??", "r14b"},
     {"r15", "r15d", "r15w", "??", "r15b"}
 };
-static const RegisterConst gArgRegisters[12][5] = {
+static const RegisterConst gArgRegisters[13][5] = {
     {"rax", "eax" , "ax"  , "ah", "al"  }, /* For syscalls only */
     {"rdi", "edi" , "di"  , "??", "dil" },
     {"rsi", "esi" , "si"  , "??", "sil" },
@@ -236,14 +236,14 @@ static void assembleFunctionCall(AsmWriteBlock* asm_block, const AstPtr fn_call)
                 // if (arg->node_type == StringConst) {
 
                 // }
-                strncpy(arg_value, arg->tokens->token.text, 32);
+                strncpy(arg_value, asm_const.token.text, 32);
                 printf("[next arg %u `%s`]\n", arg_index, arg_value);
                 
                 sprintf(
                     arg_block.middle, "\tmov  %s, %s\t; arg[%u]: %s\n",
                     gArgRegisters[arg_index][0], asm_const.data_identifier,
                     arg_index, arg_value
-                ); putc
+                );
                 strcat(function_call_block.middle, arg_block.middle);
                 
                 if (arg->node_type == StringConst) {
