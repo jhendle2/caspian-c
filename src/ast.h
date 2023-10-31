@@ -44,6 +44,7 @@ enum AstNodeType {
     FunctionDeclaration,
     Function,
     FunctionCall,
+    SysCall,
     ReturnType,
 
     Operator,

@@ -3,6 +3,27 @@
 #include <string.h>
 
 #include "utils.h"
+#include "error.h"
+
+AsmConstant gAsmConstantTable[CASPIAN_MAX_ASM_CONSTANTS];
+uint gAsmConstantTableSz = 0;
+
+void addAsmConstant(const AsmConstant* asm_const) {
+    if (gAsmConstantTableSz == CASPIAN_MAX_ASM_CONSTANTS) {
+        warning_token(asm_const->token, "Maximum ASM constants is currently set to "MAGENTA"(%u)"RESET"\n", CASPIAN_MAX_ASM_CONSTANTS);        
+        return;
+    }
+    gAsmConstantTable[gAsmConstantTableSz++] = (*asm_const);
+}
+
+bool getAsmConstant(const Token* token, AsmConstant* asm_const) {
+    for (uint i = 0; i<gAsmConstantTableSz; i++) {
+        if (cmpTokens(token, &(gAsmConstantTable[i].token))) {
+            (*asm_const) = gAsmConstantTable[i];
+            return true;
+        }
+    } return false;
+}
 
 bool isIntegerConst(const Token* token) {
     return (isDecConst(token) || isHexConst(token));

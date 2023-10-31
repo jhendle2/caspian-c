@@ -20,9 +20,15 @@ void safeExit(const ExitCode exit_code) {
     printf("Succesfully cleaned-up all dangling token-lists\n");
 
 
+    /********************************************************************/
     extern AstPtr gAstMaster;
     delAstPtr(&gAstMaster);
     printf("Successfully cleaned-up all dangling AST-nodes\n");
+
+    /********************************************************************/
+    extern FILE* gActiveAsm;
+    if (gActiveAsm) fclose(gActiveAsm);
+    printf("Successfully cleaned-up the active assembly outfile\n");
 
     /********************************************************************/
     exit(exit_code);

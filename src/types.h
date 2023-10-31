@@ -23,4 +23,6 @@ enum TypeStatus recallTypeAlias(const Token* key, Token value[CASPIAN_MAX_TOKENS
 
 bool isType(const Token* token);
 
+typedef Token TypeToken;
+
 #endif /* CASPIAN_TYPES_H */

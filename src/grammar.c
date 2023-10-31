@@ -198,8 +198,13 @@ void discernNodeType(AstPtr* head_ptr) {
         ) &&
             cmpAstPtr(args_begin, "(")
     ) {
-        if (isPossibleIdentifier(&(function_call->tokens->token)))
-            function_call->node_type = FunctionCall;
+        if (isPossibleIdentifier(&(function_call->tokens->token))) {
+            if (cmpToken(&(function_call->tokens->token), "syscall")) 
+                function_call->node_type = SysCall;
+            else
+                function_call->node_type = FunctionCall;
+            
+        }
         if (isConditional(&(function_call->tokens->token)))
             function_call->node_type = Conditional;
         if (isLoop(&(function_call->tokens->token)))

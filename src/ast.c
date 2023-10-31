@@ -170,6 +170,7 @@ static const char* strAstNodeType[] = {
     "FunctionDeclaration",
     "Function",
     "FunctionCall",
+    "SysCall",
     "ReturnType",
 
     "Operator",
@@ -408,14 +409,17 @@ AstPtr buildSecondPass(AstPtr first_pass_astp) {
 
 AstPtr buildAstTree(TokenList file_as_tokens) {
     AstPtr first_pass_astp  = buildFirstPass(file_as_tokens);
-    printf("\n[FirstPass]\n");
-    treeAstPtr(first_pass_astp, 0);
-    printf("\n");
+    /* NOTE: We don't free the first pass tree b/c we use
+        every node in the second pass tree.
+        We'd double free otherwise. */
+    // printf("\n[FirstPass]\n");
+    // treeAstPtr(first_pass_astp, 0);
+    // printf("\n");
 
     AstPtr second_pass_astp = buildSecondPass(first_pass_astp);
-    printf("\n[SecondPass]\n");
-    treeAstPtr(second_pass_astp, 0);
-    printf("\n");
+    // printf("\n[SecondPass]\n");
+    // treeAstPtr(second_pass_astp, 0);
+    // printf("\n");
     return second_pass_astp;
 }
 
