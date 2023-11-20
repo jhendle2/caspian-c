@@ -1,6 +1,8 @@
-#include <stdio.h>
+void sayHelloWorld() {
+    syscall(1, 1, "Hello, World!\n");
+}
 
 int main(int argc, char** argv) {
-    printf("Hello, World!\n");
+    sayHelloWorld();
     return 0;
 }

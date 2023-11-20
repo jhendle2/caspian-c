@@ -1,0 +1,31 @@
+     1                                  global main
+     2                                  
+     3                                  section .text
+     4                                  
+     5                                  sayHelloWorld:
+     6 00000000 55                      	push rbp	; Store old stack pointer
+     7 00000001 4889E5                  	mov  rbp, rsp	; Load stack pointer from function call
+     8 00000004 B801000000              	mov  rax, 1	; arg[0]: 1
+     9 00000009 BF01000000              	mov  rdi, 1	; arg[1]: 1
+    10 0000000E 48BE-                   	mov  rsi, const0	; arg[2]: "Hello, World!", 0x0A
+    10 00000010 [0000000000000000] 
+    11 00000018 BA0E000000              	mov  rdx, const0_len	; arg[3_len]: "Hello, World!", 0x0A size
+    12 0000001D 0F05                    	syscall
+    13 0000001F 5D                      	pop  rbp	; Restore stack pointer
+    14 00000020 C3                      	ret			; Exit function
+    15                                  main:
+    16 00000021 55                      	push rbp	; Store old stack pointer
+    17 00000022 4889E5                  	mov  rbp, rsp	; Load stack pointer from function call
+    18 00000025 E8D6FFFFFF              	call sayHelloWorld	; call function `sayHelloWorld`
+    19 0000002A B800000000              	mov  eax, 0	; Constant load (0)
+    20 0000002F 5D                      	pop  rbp	; Restore stack pointer
+    21 00000030 C3                      	ret			; Exit function
+    22                                  
+    23                                  section .rodata
+    24                                  
+    25                                  section .data
+    26 00000000 48656C6C6F2C20576F-     	const0: db "Hello, World!", 0x0A
+    26 00000009 726C64210A         
+    27                                  	const0_len: equ $ - const0
+    28                                  
+    29                                  
